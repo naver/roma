@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.vscode
+docsource/build
+dist/
+roma.egg-info/
