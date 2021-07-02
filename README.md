@@ -10,7 +10,7 @@ Latest documentation is available here: https://naver.github.io/roma/.
 ## Installation
 The easiest way to install *RoMa* consists in using pip:
 ```
-pip install roma
+pip install git+https://github.com/naver/roma (PyPI package to come soon)
 ```
 We also recommend installing [torch-batch-svd](https://github.com/KinglittleQ/torch-batch-svd)
 to achieve significant speed-up with _special_procrustes_ function on a CUDA GPU.

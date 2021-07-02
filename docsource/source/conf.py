@@ -17,13 +17,12 @@ sys.path.insert(0, os.path.abspath('../..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'RoMa documentation'
+project = 'RoMa'
 copyright = '2021, Naver Corp.'
 author = 'Romain Brégier'
 
 # The full version, including alpha/beta/rc tags
-release = '1.1.1'
-
+release = '1.2.0'
 
 # -- General configuration ---------------------------------------------------
 
@@ -61,3 +60,5 @@ html_static_path = ['_static']
 
 # Additional settings added manually:
 add_module_names = False
+
+html_show_sourcelink = False

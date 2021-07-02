@@ -8,7 +8,7 @@ Installation
 ------------
 The easiest way to install *RoMa* consists in using pip::
 
-    pip install roma
+    pip install git+https://github.com/naver/roma (PyPI package to come soon)
 
 We also recommend installing `torch-batch-svd <https://github.com/KinglittleQ/torch-batch-svd>`_
 to achieve significant speed-up with :func:`~roma.mappings.procrustes` on a CUDA GPU (see section :ref:`Why a new library?`).
