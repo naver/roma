@@ -4,3 +4,4 @@ __pycache__/
 docsource/build
 dist/
 roma.egg-info/
+docs/.buildinfo
