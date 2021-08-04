@@ -1,10 +1,9 @@
 # RoMa
-# Copyright (c) 2020 NAVER Corp.
+# Copyright (c) 2021 NAVER Corp.
 # CC BY-NC-SA 4.0
 # Available only for non-commercial use.
-
 """
-Compare the deviation of various differentiable mapping onto the 3D rotation space with respect to their tangent plane.
+Plot the deviation of various differentiable 3D rotation mappings with respect to their tangent plane, for different step sizes.
 """
 
 import torch
@@ -124,3 +123,5 @@ plt.xlim(0, max(epsilons))
 plt.xlabel('Step size')
 plt.grid('on')
 plt.tight_layout()
+plt.savefig("linearity_deviations.svg")
+plt.savefig("linearity_deviations.png")

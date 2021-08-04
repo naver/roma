@@ -1,10 +1,10 @@
 # RoMa
-# Copyright (c) 2020 NAVER Corp.
+# Copyright (c) 2021 NAVER Corp.
 # CC BY-NC-SA 4.0
 # Available only for non-commercial use.
-
 """
-Plot computation time of special_procrustes potentially using regular torch.svd function or batch SVD decomposition when available.
+Plot computation time of special_procrustes using regular torch.svd decomposition versus batch SVD decomposition when available.
+Requires a CUDA-enabled GPU.
 """
  
 import torch
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 def profile(func, label):
     print("Profiling", label)
-    
+
     # Dry run
     func()
     
@@ -27,12 +27,9 @@ def profile(func, label):
         for i in range(inner_repeat):
             func()
         end.record()
-    
         # Waits for everything to finish running
         torch.cuda.synchronize()
-        
-        durations.append(start.elapsed_time(end))
-            
+        durations.append(start.elapsed_time(end))            
     # Print info
     print("-Mean (ms):", np.mean(durations))
     print("-Median (ms)", np.median(durations))
@@ -60,7 +57,6 @@ for n in batch_sizes:
 
     Mtarget = torch.randn((n, 3, 3), device = device)
 
-
     durations = profile(lambda : roma.special_procrustes(M), "special_procrustes")
     batch_durations.append(durations)
 
@@ -71,7 +67,6 @@ for n in batch_sizes:
     batch_durations_basic.append(durations)
     roma.internal.svd = foo
 
-plt.style.use("dark_background")
 fig, ax = plt.subplots(1)
 fig.patch.set_alpha(0.) # no background
 ax.patch.set_alpha(0.) # no background
@@ -86,11 +81,10 @@ for label, b_durs in (("Pytorch SVD", batch_durations_basic), ("Batch SVD", batc
 
 plt.xlabel("Batch size")
 plt.ylabel("Computation time (ms)")
+plt.title("Special Procrustes (forward pass)")
 plt.loglog()
-#plt.semilogx()
 
 plt.xticks(batch_sizes)
-#plt.yticks([10, 100, 1000])
 plt.legend()
 
 plt.savefig("special_procrustes_benchmark.png", transparent=True)

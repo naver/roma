@@ -1,12 +1,12 @@
 # RoMa
-# Copyright (c) 2020 NAVER Corp.
+# Copyright (c) 2021 NAVER Corp.
 # CC BY-NC-SA 4.0
 # Available only for non-commercial use.
 """
 Study of numerical stability of rotmat_geodesic_distance_naive and rotmat_geodesic_distance.
-Plot value and gradient of a function consisting, given an angle theta to:
-- generate a rotation matrix of angle theta
-- estimate its geodesic distance with respect to the identity rotation (i.e. absolute value of rotation angle).
+Plot value and gradient of a function consisting given an angle theta in:
+- generating a rotation matrix of angle theta
+- estimating its geodesic distance with respect to the identity rotation (i.e. the absolute value of theta).
 """
 
 from numpy.lib.utils import safe_eval
@@ -50,9 +50,6 @@ for label, input_angles in [("zero", np.concatenate((np.linspace(-0.005, 0.0, 10
         output.backward()
         output_angles_naive.append(output.item())
         gradients_naive.append(theta.grad.item())
-
-
-    #plt.style.use("dark_background")
 
     fig, ax = plt.subplots(1)
     fig.patch.set_alpha(0.) # no background
