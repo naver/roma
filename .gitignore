@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.vscode
 docsource/build
+docs/
 dist/
 roma.egg-info/
 docs/.buildinfo
