@@ -13,7 +13,7 @@ The easiest way to install *RoMa* consists in using pip::
 We also recommend installing `torch-batch-svd <https://github.com/KinglittleQ/torch-batch-svd>`_
 to achieve significant speed-up with :func:`~roma.mappings.procrustes` on a CUDA GPU (see section :ref:`Why a new library?`).
 
-Alternatively one can install *RoMa* directly from source repository::
+Alternatively one can install the latest version of *RoMa* directly from source repository::
 
     pip install git+https://github.com/naver/roma
 
@@ -202,18 +202,17 @@ References
 ==========
 For a more in-depth discussion regarding differentiable mappings on the rotation space, please refer to:
 
-**Romain Brégier, Deep regression on manifolds: a 3D rotation case study.** Technical report arXiv 2103.16317, 2021. (https://arxiv.org/abs/2103.16317).
+**Romain Brégier, Deep Regression on Manifolds: A 3D Rotation Case Study.** in 2021 International Conference on 3D Vision (3DV), 2021. (https://arxiv.org/abs/2103.16317).
+
+Please cite this work in your publications:
 ::
 
-    @article{bregier2021deep,
-        title={Deep regression on manifolds: a {3D} rotation case study},
+    @inproceedings{bregier2021deepregression,
+        title={Deep Regression on Manifolds: a {3D} Rotation Case Study},
         author={Br{\'e}gier, Romain},
-        journal={arXiv preprint arXiv:2103.16317},
+        journal={2021 International Conference on 3D Vision (3DV)},
         year={2021}
     }
-
-
-For *RoMa*-related inquiries, feel free to get in touch using GitHub issues.
 
 Changelog
 ==========

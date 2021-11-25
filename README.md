@@ -28,16 +28,15 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 ## References
 For a more in-depth discussion regarding differentiable mappings on the rotation space, please refer to:
-- [__Romain Brégier, Deep regression on manifolds: a 3D rotation case study.__ _Technical report arXiv 2103.16317_, 2021.](https://arxiv.org/abs/2103.16317)
+- [__Romain Brégier, Deep Regression on Manifolds: a 3D Rotation Case Study.__ in _2021 International Conference on 3D Vision (3DV)_, 2021.](https://arxiv.org/abs/2103.16317)
+
+Please cite this work in your publications:
 ```
-@article{bregier2021deep,
-	title={Deep regression on manifolds: a {3D} rotation case study},
+@inproceedings{bregier2021deepregression,
+	title={Deep Regression on Manifolds: a {3D} Rotation Case Study},
 	author={Br{\'e}gier, Romain},
-	journal={arXiv preprint arXiv:2103.16317},
+	journal={2021 International Conference on 3D Vision (3DV)},
 	year={2021}
 }
 ```
-
-For *RoMa*-related inquiries, feel free to get in touch using GitHub issues.
-
 
