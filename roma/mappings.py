@@ -160,7 +160,7 @@ def symmatrix_to_projective_point(A):
     A, batch_shape = roma.internal.flatten_batch_dims(A, end_dim=-3)
     B, D1, D2 = A.shape
     assert (D1,D2) == (4,4), "Input should be a symmetric Bx4x4 matrix."
-    eigenvalues, eigenvectors = torch.symeig(A, eigenvectors=True)
+    eigenvalues, eigenvectors = roma.internal.symeig_lower(A)
     # Eigenvalues are sorted in ascending order
     q = eigenvectors[:,:,0]
     return roma.internal.unflatten_batch_dims(q, batch_shape)

@@ -8,14 +8,14 @@ It is implemented in PyTorch and aims to be an easy-to-use and reasonably effici
 Latest documentation is available here: https://naver.github.io/roma/.
 
 ## Installation
-The easiest way to install *RoMa* consists in using pip:
+The easiest way to install *RoMa* is to use pip:
 ```
 pip install roma
 ```
 We also recommend installing [torch-batch-svd](https://github.com/KinglittleQ/torch-batch-svd)
 to achieve significant speed-up with _special_procrustes_ function on a CUDA GPU.
 
-Alternatively one can install *RoMa* directly from source repository:
+Alternatively one can install the latest version of *RoMa* directly from the source repository:
 ```
 pip install git+https://github.com/naver/roma
 ```

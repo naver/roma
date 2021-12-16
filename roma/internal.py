@@ -54,3 +54,20 @@ def svd(M):
         return _fast_gpu_svd(M)
     else:
         return torch.svd(M)
+
+# Batched eigenvalue decomposition.
+# Recent version of PyTorch deprecated the use of torch.symeig.
+try:
+    torch.linalg.eigh
+    def symeig_lower(A):
+        """
+        Batched eigenvalue decomposition. Only the lower part of the matrix is considered.
+        """
+        return torch.linalg.eigh(A, UPLO='L')
+except (NameError, AttributeError):
+    # Older PyTorch version
+    def symeig_lower(A):
+        """
+        Batched eigenvalue decomposition. Only the lower part of the matrix is considered.
+        """
+        return torch.symeig(A, upper=False, eigenvectors=True)

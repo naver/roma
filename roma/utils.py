@@ -249,20 +249,24 @@ def rotmat_composition(sequence, normalize = False):
         result = roma.mappings.special_procrustes(result)
     return result
 
-def unitquat_slerp(q0, q1, steps):
+def unitquat_slerp(q0, q1, steps, shortest_path=False):
     """
     Spherical linear interpolation between two unit quaternions.
     
     Args: 
         q0, q1 (Ax4 tensor): batch of unit quaternions (A may contain multiple dimensions).
         steps (tensor of shape B): interpolation steps, 0.0 corresponding to q0 and 1.0 to q1 (B may contain multiple dimensions).
+        shortest_path (boolean): if True, interpolation will be performed along the shortest path on SO(3).
     Returns: 
         batch of interpolated quaternions (BxAx4 tensor).
     Note:
         When considering quaternions as rotation representations,
-        one should keep in mind that interpolation is not necessarily performed along the shortest arc,
+        one should keep in mind that spherical interpolation is not necessarily performed along the shortest arc,
         depending on the sign of ``torch.sum(q0*q1,dim=-1)``.
     """
+    if shortest_path:
+        # Flip some quaternions to ensure the shortest path interpolation
+        q1 = -torch.sign(torch.sum(q0*q1, dim=-1, keepdim=True)) * q1
     # Relative rotation
     rel_q = quat_product(quat_conjugation(q0), q1)
     rel_rotvec = roma.mappings.unitquat_to_rotvec(rel_q)
@@ -284,8 +288,66 @@ def rotvec_slerp(rotvec0, rotvec1, steps):
     """
     q0 = roma.mappings.rotvec_to_unitquat(rotvec0)
     q1 = roma.mappings.rotvec_to_unitquat(rotvec1)
-    # Flip some quaternions to ensure the shortest path interpolation
-    q1 = -torch.sign(torch.sum(q0*q1, dim=-1, keepdim=True)) * q1
-    interpolated_q = unitquat_slerp(q0, q1, steps)
-    interpolated_rotvec = roma.mappings.unitquat_to_rotvec(interpolated_q)
-    return interpolated_rotvec.reshape(steps.shape + rotvec0.shape)
+    interpolated_q = unitquat_slerp(q0, q1, steps, shortest_path=True)
+    return roma.mappings.unitquat_to_rotvec(interpolated_q)
+
+def rotmat_slerp(R0, R1, steps):
+    """
+    Spherical linear interpolation between two rotation matrices.
+
+    Args:
+        R0, R1 (Ax3x3 tensor): batch of rotation matrices (A may contain multiple dimensions).
+        steps (tensor of shape B):  interpolation steps, 0.0 corresponding to R0 and 1.0 to R1 (B may contain multiple dimensions).
+    Returns: 
+        batch of interpolated rotation matrices (BxAx3x3 tensor).
+    """    
+    q0 = roma.mappings.rotmat_to_unitquat(R0)
+    q1 = roma.mappings.rotmat_to_unitquat(R1)
+    interpolated_q = unitquat_slerp(q0, q1, steps, shortest_path=True)
+    return roma.mappings.unitquat_to_rotmat(interpolated_q)
+
+def rigid_vectors_registration(x, y):
+    """
+    Returns the rotation matrix :math:`R` that best aligns an input list of vectors :math:`(x_i)_{i=1...n}` to a target list of vectors :math:`(y_i)_{i=1...n}`,
+    by minimizing the sum of square distance :math:`\sum_i \|R x_i - y_i\|^2`.
+
+    See :func:`~roma.utils.rigid_points_registration` for details.
+
+    Args:
+        x (...xNxD tensor): list of N vectors of dimension D.
+        y (...xNxD tensor): list of corresponding target vectors.
+    Returns:
+        The rotation matrix :math:`R` (...xDxD tensor).
+    """    
+    M = torch.einsum("...ki, ...kj -> ...ij", y, x)
+    R = roma.special_procrustes(M)
+    return R
+
+def rigid_points_registration(x, y):
+    """
+    Returns the rigid transformation :math:`(R,t)` that best aligns an input list of points :math:`(x_i)_{i=1...n}` to a target list of points :math:`(y_i)_{i=1...n}`,
+    by minimizing the sum of square distance :math:`\sum_i \|R x_i + t - y_i\|^2`.
+    This is sometimes referred to as the Kabsch/Umeyama algorithm.
+
+    Args:
+        x (...xNxD tensor): list of N points of dimension D.
+        y (...xNxD tensor): list of corresponding target points.
+    Returns:
+        a tuple :math:`(R, t)` consisting of a rotation matrix :math:`R` (...xDxD tensor) and a translation vector :math:`t` (...xD tensor).
+
+    References:
+        S. Umeyama, “Least-squares estimation of transformation parameters between two point patterns,” IEEE Transactions on pattern analysis and machine intelligence, vol. 13, no. 4, Art. no. 4, 1991.        
+
+        W. Kabsch, "A solution for the best rotation to relate two sets of vectors". Acta Crystallographica, A32, 1976.
+    """
+    # Center data
+    xmean = torch.mean(x, dim=-2, keepdim=True)
+    ymean = torch.mean(y, dim=-2, keepdim=True)
+    xhat = x - xmean
+    yhat = y - ymean
+    
+    # Solve the problem
+    R = rigid_vectors_registration(xhat, yhat)
+    t = (ymean - torch.einsum('...ik, ...jk -> ...ji', R, xmean)).squeeze(-2)
+    return R, t
+

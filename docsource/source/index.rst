@@ -6,14 +6,14 @@ It is implemented in PyTorch and aims to be an easy-to-use and reasonably effici
 
 Installation
 ------------
-The easiest way to install *RoMa* consists in using pip::
+The easiest way to install *RoMa* is to use pip::
 
     pip install roma
 
 We also recommend installing `torch-batch-svd <https://github.com/KinglittleQ/torch-batch-svd>`_
 to achieve significant speed-up with :func:`~roma.mappings.procrustes` on a CUDA GPU (see section :ref:`Why a new library?`).
 
-Alternatively one can install the latest version of *RoMa* directly from source repository::
+Alternatively one can install the latest version of *RoMa* directly from the source repository::
 
     pip install git+https://github.com/naver/roma
 
@@ -216,5 +216,9 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.2.2:
+    - Added :func:`~roma.utils.rigid_points_registration()` and :func:`~roma.utils.rigid_vectors_registration()`.
+    - Added :func:`~roma.utils.rotmat_slerp()`.
+    - Circumvented a deprecation warning with :func:`torch.symeig()` when using recent PyTorch versions.
 Version 1.2.1:
-    Open-source release.
+    - Open-source release.
