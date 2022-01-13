@@ -43,7 +43,7 @@ def is_rotation_matrix(R, epsilon=1e-7):
         return False
     return torch.all(torch.det(R) > 0)
 
-def random_unitquat(size = tuple(), device=None):
+def random_unitquat(size = tuple(), dtype=torch.float, device=None):
     """
     Generates a batch of random unit quaternions, uniformly sampled according to the usual quaternion metric.
 
@@ -54,12 +54,12 @@ def random_unitquat(size = tuple(), device=None):
     """
     if type(size) == int:
         size = (size,)
-    quat = torch.randn(size + (4,), device=device)
+    quat = torch.randn(size + (4,), dtype=dtype, device=device)
     quat /= torch.norm(quat, dim=-1, keepdim=True)
     assert(torch.all( torch.abs(torch.norm(quat, dim=-1) - 1) < 1e-3 ))
     return quat
 
-def random_rotmat(size  = tuple(), device=None):
+def random_rotmat(size  = tuple(), dtype=torch.float, device=None):
     """
     Generates a batch of random 3x3 rotation matrices, uniformly sampled according to the usual rotation metric.
 
@@ -68,11 +68,11 @@ def random_rotmat(size  = tuple(), device=None):
     Returns:
         batch of rotation matrices (size x 3x3 tensor).
     """
-    quat = random_unitquat(size, device)
+    quat = random_unitquat(size, dtype=dtype, device=device)
     R = roma.mappings.unitquat_to_rotmat(quat)
     return R
 
-def random_rotvec(size = tuple(), device=None):
+def random_rotvec(size = tuple(), dtype=torch.float, device=None):
     """
     Generates a batch of random rotation vectors, uniformly sampled according to the usual rotation metric.
 
@@ -81,7 +81,7 @@ def random_rotvec(size = tuple(), device=None):
     Returns:
         batch of rotation vectors (size x 3 tensor).
     """
-    quat = random_unitquat(size, device)
+    quat = random_unitquat(size, dtype=dtype, device=device)
     return roma.mappings.unitquat_to_rotvec(quat)
 
 def rotmat_cosine_angle(R):

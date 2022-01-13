@@ -216,6 +216,8 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.2.3:
+    - Improved support for double precision tensors.
 Version 1.2.2:
     - Added :func:`~roma.utils.rigid_points_registration()` and :func:`~roma.utils.rigid_vectors_registration()`.
     - Added :func:`~roma.utils.rotmat_slerp()`.

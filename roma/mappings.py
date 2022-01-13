@@ -154,8 +154,9 @@ def symmatrix_to_projective_point(A):
 
     Warning:
         - This mapping is unstable when the smallest eigenvalue of A has a multiplicity strictly greater than 1.
+        - The eigenvalue decomposition may fail, in particular when using single precision numbers.
         - Current implementation is rather slow due to the implementation of ``torch.symeig``.
-          CuSolver library provides a faster eigenvalue decomposition alternative, but results where found to be unreliable.
+          The CuSolver library provides a faster eigenvalue decomposition alternative, but results where found to be unreliable.
     """
     A, batch_shape = roma.internal.flatten_batch_dims(A, end_dim=-3)
     B, D1, D2 = A.shape
@@ -241,7 +242,7 @@ def unitquat_to_rotvec(quat):
     large_angle = ~small_angle
 
     num_rotations = len(quat)
-    scale = torch.empty(num_rotations, device=quat.device)
+    scale = torch.empty(num_rotations, dtype=quat.dtype, device=quat.device)
     scale[small_angle] = (2 + angle[small_angle] ** 2 / 12 +
                           7 * angle[small_angle] ** 4 / 2880)
     scale[large_angle] = (angle[large_angle] /
@@ -310,12 +311,12 @@ def rotmat_to_unitquat(R):
     # Adapted from SciPy:
     # https://github.com/scipy/scipy/blob/7cb3d751756907238996502b92709dc45e1c6596/scipy/spatial/transform/rotation.py#L480
 
-    decision_matrix = torch.empty((num_rotations, 4), device=matrix.device)
+    decision_matrix = torch.empty((num_rotations, 4), dtype=matrix.dtype, device=matrix.device)
     decision_matrix[:, :3] = matrix.diagonal(dim1=1, dim2=2)
     decision_matrix[:, -1] = decision_matrix[:, :3].sum(axis=1)
     choices = decision_matrix.argmax(axis=1)
 
-    quat = torch.empty((num_rotations, 4), device=matrix.device)
+    quat = torch.empty((num_rotations, 4), dtype=matrix.dtype, device=matrix.device)
 
     ind = torch.nonzero(choices != 3, as_tuple=True)[0]
     i = choices[ind]
