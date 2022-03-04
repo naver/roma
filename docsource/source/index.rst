@@ -216,6 +216,8 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.2.4:
+    - Procrustes: automatic fallback to vanilla SVD decomposition for large dimensions.
 Version 1.2.3:
     - Improved support for double precision tensors.
 Version 1.2.2:

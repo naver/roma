@@ -50,7 +50,7 @@ def svd(M):
     Returns:
         (U,D,V) decomposition, such as :math:`M = U @ diag(D) @ V^T`.
     """
-    if M.is_cuda:
+    if M.is_cuda and M.shape[1] < 32 and M.shape[2] < 32:
         return _fast_gpu_svd(M)
     else:
         return torch.svd(M)
