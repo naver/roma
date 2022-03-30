@@ -12,7 +12,7 @@ import roma.internal
 
 class _ProcrustesManualDerivatives(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, M, force_rotation, gradient_eps):
+    def forward(ctx, M, force_rotation, regularization, gradient_eps):
         assert (M.dim() == 3 and M.shape[1] == M.shape[2]), "Input should be a BxDxD batch of matrices."
         U, D, V = roma.internal.svd(M)
         # D is sorted in descending order
@@ -30,13 +30,14 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
             flip = None
         R = U @ SVt
         # Store data for backprop
-        ctx.save_for_backward(U, D, V, flip)
+        ctx.save_for_backward(U, D, V, flip, M, R)
         ctx.gradient_eps = gradient_eps
+        ctx.regularization = regularization
         return R
 
     @staticmethod
     def backward(ctx, grad_R):
-        U, D, V, flip = ctx.saved_tensors
+        U, D, V, flip, M, R = ctx.saved_tensors
         gradient_eps = ctx.gradient_eps
 
         Uik_Vjl = torch.einsum('bik,bjl -> bklij', U, V)
@@ -59,21 +60,27 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
         UOmega = torch.einsum('bkm, bmlij -> bklij', U, Omega_klij)
         Janalytical = torch.einsum('bkmij, bml -> bklij', UOmega, V.transpose(-1,-2))
         grad_M = torch.einsum('bkl, bklij -> bij', grad_R, Janalytical)
-        return grad_M, None, None
 
-def procrustes(M, force_rotation = False, gradient_eps=1e-5):
+        if ctx.regularization != 0.0:
+            # Add a regularization term in the direction of the orthonormalized output.
+            grad_M += ctx.regularization * (M - R)
+        return grad_M, None, None, None
+
+def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5):
     """ 
     Returns the orthonormal matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`.
 
     Args:
         M (...xNxN tensor): batch of square matrices.
         force_rotation (bool): if True, forces the output to be a rotation matrix.
+        regularization (float >= 0): weight of a regularization term added to the gradient.
+            Using this regularization is equivalent to adding a term :math:`regularization * \| M - R \|_F^2` to the training loss function.
         gradient_eps (float > 0): small value used to enforce numerical stability during backpropagation.
     Returns:
         batch of orthonormal matrices (...xNxN tensor).
     """
     M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
-    R = _ProcrustesManualDerivatives.apply(M, force_rotation, gradient_eps)
+    R = _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)
     return roma.internal.unflatten_batch_dims(R, batch_shape)
 
 def special_procrustes(M, gradient_eps=1e-5):
@@ -82,6 +89,8 @@ def special_procrustes(M, gradient_eps=1e-5):
 
     Args:
         M (...xNxN tensor): batch of square matrices.
+        regularization (float >= 0): weight of a regularization term added to the gradient.
+            Using this regularization is equivalent to adding a term :math:`regularization * \| M - R \|_F^2` to the training loss function.
         gradient_eps (float > 0): small value used to enforce numerical stability during backpropagation.
     Returns:
         batch of rotation matrices (...xNxN tensor).

@@ -20,7 +20,7 @@ class TestProcrustesDerivatives(unittest.TestCase):
         M = torch.randn(batch_size, d, d, dtype=dtype, device=device)
         # Check derivatives
         eps = 1e-7
-        eps2 = 1e-5
+        eps2 = 1e-4
         for func in (lambda x : roma.procrustes(x),
                     lambda x : roma.special_procrustes(x),):
             # Numerical gradient
@@ -28,7 +28,7 @@ class TestProcrustesDerivatives(unittest.TestCase):
             auto = utils.automatic_jacobian(func, M)
             self.assertTrue(utils.is_close(num, auto, eps2=eps2))
 
-    def _test_convergence(self, random_initialization):
+    def _test_convergence(self, random_initialization, regularization=0.0):
         """
         Try to solve an optimization problem using Special Procrustes on SO(3)
         """
@@ -53,26 +53,35 @@ class TestProcrustesDerivatives(unittest.TestCase):
         optimizer = torch.optim.Adam([M], lr=0.1)
 
         # display_period = 100
-        for iteration in range(1000):
+        # print(f"Regularization: {regularization}")
+        for iteration in range(2000):
             optimizer.zero_grad()
 
-            R = roma.procrustes(M, force_rotation=force_rotation)
+            R = roma.procrustes(M, force_rotation=force_rotation, regularization=regularization)
             if force_rotation:
                 assert roma.is_rotation_matrix(R, 1e-5)
             else:
                 assert roma.is_orthonormal_matrix(R, 1e-5)
             loss = torch.nn.functional.mse_loss(R, Rtarget)
+            with torch.no_grad():
+                unnormalized_loss = torch.nn.functional.mse_loss(R, M)
             # if iteration % display_period == display_period-1:
-            #     print(f"{iteration}: {loss.item()}")
+            #     print(f"{iteration}: loss {loss.item()} -- unnormalized_loss {unnormalized_loss.item()}")
+            
             loss.backward()
             optimizer.step()
-        self.assertLess(loss.item(),  1e-8) 
+        self.assertLess(loss.item(),  1e-7)
+        if regularization > 0:
+            # M should be roughly equal to R after optimization due to the regularization
+            self.assertLess(unnormalized_loss.item(),  1e-4)
 
     def test_convergence_random_initialization(self):
-        self._test_convergence(True)
+        self._test_convergence(True, 0.0)
+        self._test_convergence(True, 1e-4)
 
     def test_convergence_degenerated_initialization(self):
-        self._test_convergence(False)        
+        self._test_convergence(False)    
+        self._test_convergence(False, 1e-4)
 
 if __name__ == '__main__':
     unittest.main()

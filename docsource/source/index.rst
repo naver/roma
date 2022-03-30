@@ -116,6 +116,13 @@ To be precise, it consists in the Fréchet mean considering the chordal distance
 .. note::
     The same average could be performed using quaternion representation and *symmatrix* mapping (slower batched implementation on GPU).
 
+Rigid registration
+-------------------
+:func:`~roma.utils.rigid_points_registration` and :func:`~roma.utils.rigid_vectors_registration` enable to align ordered sets of points/vectors:
+
+.. literalinclude :: ../../examples/snippets/rigid_registration.py
+    :language: python
+
 Spherical linear interpolation (SLERP)
 --------------------------------------
 
@@ -216,6 +223,9 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.2.5:
+    - Added an optional `regularization` argument for Procrustes orthonormalization.
+    - Added a rigid registration example in the documentation.
 Version 1.2.4:
     - Procrustes: automatic fallback to vanilla SVD decomposition for large dimensions.
 Version 1.2.3:

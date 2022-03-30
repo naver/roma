@@ -19,10 +19,10 @@ sys.path.insert(0, os.path.abspath('../..'))
 
 project = 'RoMa'
 copyright = '2021, Naver Corp.'
-author = 'Romain Brégier'
+author = u'Romain Brégier'
 
 # The full version, including alpha/beta/rc tags
-release = '1.2.4'
+release = 'latest'
 
 # -- General configuration ---------------------------------------------------
 
