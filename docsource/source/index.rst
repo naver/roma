@@ -223,6 +223,10 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.2.6:
+    - Added an optional `regularization` argument to :func:`~roma.mappings.special_procrustes()`.
+    - Added an optional `clamping` argument to :func:`~roma.utils.rotmat_geodesic_distance()`.
+    - Fix: :func:`~roma.mappings.rotvec_to_rotmat` no longer produces nonfinite gradient for null rotation vectors.
 Version 1.2.5:
     - Added an optional `regularization` argument for Procrustes orthonormalization.
     - Added a rigid registration example in the documentation.

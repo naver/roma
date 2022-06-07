@@ -111,13 +111,36 @@ class TestMappings(unittest.TestCase):
     def test_symmatrix_to_unitquat(self):
         torch.manual_seed(668)
         batch_size = 100
-        # Eigenvalue decomposition tends to fail using float32
+        # Remark: eigenvalue decomposition tends to fail using float32.
         # and depending on the seed, the eigenvalue decomposition may fail due to conditionning issues.
         for dtype in (torch.float64,):
             x = torch.randn((batch_size, 10), dtype=dtype, device=device)
             q = roma.symmatrixvec_to_unitquat(x)
             self.assertEqual(q.shape, (batch_size, 4))
             self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1) < 1e-6))
+
+    def test_rotvec_rotmat_nan_issues(self):
+        """
+        Check that casting using rotation vectors does not lead to non finite values with 0 angles.
+        """
+        rotvec = torch.zeros(3, requires_grad=True)
+        R = roma.rotvec_to_rotmat(rotvec)
+        loss = torch.sum(R)
+        loss.backward()
+        self.assertTrue(torch.all(torch.isfinite(loss)))
+        self.assertTrue(torch.all(torch.isfinite(rotvec.grad)))
+
+    def test_rotvec_unitquat_nan_issues(self):
+        """
+        Check that casting using rotation vectors does not lead to non finite values with 0 angles.
+        """
+        rotvec = torch.zeros(3, requires_grad=True)
+        q = roma.rotvec_to_unitquat(rotvec)
+        loss = torch.sum(q)
+        loss.backward()
+        self.assertTrue(torch.all(torch.isfinite(loss)))
+        self.assertTrue(torch.all(torch.isfinite(rotvec.grad)))
+
 
 if __name__ == "__main__":
     unittest.main()

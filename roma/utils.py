@@ -99,17 +99,20 @@ def rotmat_cosine_angle(R):
 
 
 _ONE_OVER_2SQRT2 = 1.0 / (2 * np.sqrt(2))
-def rotmat_geodesic_distance(R1, R2):
+def rotmat_geodesic_distance(R1, R2, clamping=1.0):
     """
     Returns the angular distance alpha between a pair of rotation matrices.
     Based on the equality :math:`|R_2 - R_1|_F = 2 \sqrt{2} sin(alpha/2)`.
 
     Args:
         R1, R2 (...x3x3 tensor): batch of 3x3 rotation matrices.
+        clamping: clamping value applied to the input of :func:`torch.asin()`.
+                Use 1.0 to ensure valid angular distances.
+                Use a value strictly smaller than 1.0 to ensure finite gradients.
     Returns:
-        batch of angles in radian (... tensor).
+        batch of angles in radians (... tensor).
     """
-    return 2.0 * torch.asin(torch.clamp_max(torch.norm(R2 - R1, dim=[-1, -2]) * _ONE_OVER_2SQRT2, 1.0))
+    return 2.0 * torch.asin(torch.clamp_max(torch.norm(R2 - R1, dim=[-1, -2]) * _ONE_OVER_2SQRT2, clamping))
 
 def rotmat_geodesic_distance_naive(R1, R2):
     """
@@ -119,7 +122,7 @@ def rotmat_geodesic_distance_naive(R1, R2):
     Args:
         R1, R2 (...x3x3 tensor): batch of 3x3 rotation matrices.
     Returns:
-        batch of angles in radian (... tensor).
+        batch of angles in radians (... tensor).
     """
     R = R1.transpose(-1,-2) @ R2
     cos = rotmat_cosine_angle(R)

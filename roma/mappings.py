@@ -83,7 +83,7 @@ def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5):
     R = _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)
     return roma.internal.unflatten_batch_dims(R, batch_shape)
 
-def special_procrustes(M, gradient_eps=1e-5):
+def special_procrustes(M, regularization=0.0, gradient_eps=1e-5):
     """
     Returns the rotation matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`.
 
@@ -95,7 +95,7 @@ def special_procrustes(M, gradient_eps=1e-5):
     Returns:
         batch of rotation matrices (...xNxN tensor).
     """
-    return procrustes(M, True, gradient_eps)
+    return procrustes(M, True, regularization, gradient_eps)
 
 def procrustes_naive(M, force_rotation : bool = False):
     """
@@ -365,8 +365,10 @@ def rotvec_to_rotmat(rotvec: torch.Tensor, epsilon=1e-6) -> torch.Tensor:
     theta = torch.norm(rotvec, dim=-1)
     is_angle_small = theta < epsilon
     
-    # Rodrigues formula for angles that are not small
-    axis = rotvec / theta[...,None]
+    # Rodrigues formula for angles that are not small.
+    # Note: we use clamping to avoid non finite values for small angles
+    # (torch.where produces nan gradients in such case).
+    axis = rotvec / torch.clamp_min(theta[...,None], epsilon)
     kx, ky, kz = axis[:,0], axis[:,1], axis[:,2]
     sin_theta = torch.sin(theta)
     cos_theta = torch.cos(theta)
@@ -390,11 +392,8 @@ def rotvec_to_rotmat(rotvec: torch.Tensor, epsilon=1e-6) -> torch.Tensor:
     R_first_order = torch.stack([one, -zs, ys,
                                  zs, one, -xs,
                                  -ys, xs, one], dim=-1).reshape(-1, 3, 3)
-    # Merge both results
-    R = torch.empty_like(R_rodrigues)
-    R[is_angle_small] = R_first_order[is_angle_small]
-    is_angle_not_small = ~is_angle_small
-    R[is_angle_not_small] = R_rodrigues[is_angle_not_small]
+    # Select the appropriate expression
+    R = torch.where(is_angle_small[:,None,None], R_first_order, R_rodrigues)
     return roma.internal.unflatten_batch_dims(R, batch_shape)
     
 def rotmat_to_rotvec(R):
