@@ -7,6 +7,10 @@ It is implemented in PyTorch and aims to be an easy-to-use and reasonably effici
 ## Documentation
 Latest documentation is available here: https://naver.github.io/roma/.
 
+
+
+We test *RoMa* with PyTorch versions 1.6.0 and latest: [![Unit tests](https://github.com/naver/roma/actions/workflows/main.yml/badge.svg)](https://github.com/naver/roma/actions/workflows/main.yml)
+
 ## Installation
 The easiest way to install *RoMa* is to use pip:
 ```
