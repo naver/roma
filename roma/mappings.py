@@ -153,6 +153,7 @@ def special_gramschmidt(M, epsilon=0):
 def symmatrix_to_projective_point(A):
     """
     Converts a DxD symmetric matrix A into a projective point represented by a unit vector :math:`q` minimizing :math:`q^T A q`.
+    Only the lower part of the matrix is considered in practice.
 
     Args:
         A (...xDxD tensor): batch of symmetric matrices. Only the lower triangular part is considered.
@@ -191,11 +192,11 @@ def symmatrixvec_to_unitquat(x):
     batch_size, D = x.shape
     assert(D) == 10, "Input should be a Bx10 tensor."
     A = torch.empty((batch_size, 4, 4), dtype=x.dtype, device=x.device)
-    # Fill only the upper diagonal
-    A[:,0,:] = x[:,0:4]
-    A[:,1,1:] = x[:,4:7]
-    A[:,2,2:] = x[:,7:9]
-    A[:,3,3] = x[:,9]
+    # Fill only the lower triangular part of the matrix.
+    A[:, :,0] = x[:,0:4]
+    A[:,1:,1] = x[:,4:7]
+    A[:,2:,2] = x[:,7:9]
+    A[:, 3,3] = x[:,9]
     return roma.internal.unflatten_batch_dims(symmatrix_to_projective_point(A), batch_shape)    
 
 def rotvec_to_unitquat(rotvec):

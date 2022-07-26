@@ -223,6 +223,9 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.2.7:
+    - Fix of :func:`~roma.internal.unflatten_batch_dims()` to ensure compatibility with PyTorch 1.6.0.
+    - Fix of :func:`~symmatrixvec_to_unitquat()` that was not producing a lower triangular matrix.
 Version 1.2.6:
     - Added an optional `regularization` argument to :func:`~roma.mappings.special_procrustes()`.
     - Added an optional `clamping` argument to :func:`~roma.utils.rotmat_geodesic_distance()`.

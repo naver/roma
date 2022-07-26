@@ -111,11 +111,20 @@ class TestMappings(unittest.TestCase):
     def test_symmatrix_to_unitquat(self):
         torch.manual_seed(668)
         batch_size = 100
-        # Remark: eigenvalue decomposition tends to fail using float32.
-        # and depending on the seed, the eigenvalue decomposition may fail due to conditionning issues.
-        for dtype in (torch.float64,):
+        # Remark: the eigenvalue decomposition may fail using float32 or depending on the random seed,
+        # due to conditionning issues.
+        for dtype in (torch.float32, torch.float64):
             x = torch.randn((batch_size, 10), dtype=dtype, device=device)
             q = roma.symmatrixvec_to_unitquat(x)
+            # Ensure that the output is a unit quaternion.
+            self.assertEqual(q.shape, (batch_size, 4))
+            self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1) < 1e-6))
+
+            # Same test using explicitly a symmetric matrix.
+            A = torch.randn((batch_size, 4, 4), dtype=dtype, device=device)
+            A = A + A.permute(0, 2, 1)
+            q = roma.symmatrix_to_projective_point(A)
+            # Ensure that the output is a unit quaternion.
             self.assertEqual(q.shape, (batch_size, 4))
             self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1) < 1e-6))
 

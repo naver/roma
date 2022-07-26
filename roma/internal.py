@@ -30,7 +30,8 @@ def unflatten_batch_dims(tensor, batch_shape):
     :meta private:
     Revert flattening of a tensor.
     """
-    return tensor.unflatten(dim=0, sizes=batch_shape) if len(batch_shape) > 0 else tensor.squeeze(0)
+    # Note: alternative to tensor.unflatten(dim=0, sizes=batch_shape) that was not supported by PyTorch 1.6.0.
+    return tensor.reshape(batch_shape + tensor.shape[1:]) if len(batch_shape) > 0 else tensor.squeeze(0)
 
 def _pseudo_inverse(x, eps):
     """
