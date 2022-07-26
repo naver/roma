@@ -1,10 +1,11 @@
+name: Unit tests
 on: [push]
 
 jobs:
-  run_tests_job:
+  run_unit_tests_job:
     runs-on: ubuntu-latest
     name: Run unit tests
-    
+
     strategy:
       matrix:
         python-version: ["3.8"]
