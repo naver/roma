@@ -102,6 +102,35 @@ class TestUtils(unittest.TestCase):
                 R_slerp = roma.rotmat_slerp(R0, R1, steps)
                 self.assertTrue(is_close(roma.unitquat_to_rotmat(slerp1), R_slerp))
 
+                # Check that the first and last element of quaternion slerp are consistent with the inputs
+                q = roma.unitquat_slerp(q0, q1, steps, shortest_arc=False)
+                self.assertTrue(is_close(q[0], q0))
+                self.assertTrue(is_close(q[-1], q1))
+
+                # Similar test when shortest_arc==True
+                q = roma.unitquat_slerp(q0, q1, steps, shortest_arc=True)
+                self.assertTrue(is_close(q[0], q0))
+                self.assertTrue(torch.all(torch.min(torch.norm(q[-1] - q1, dim=-1), torch.norm(q[-1] + q1, dim=-1)) < 5e-6))
+
+    def test_unitquat_slerp(self):
+        # Test of slerp on a specific example,
+        # where enforcing -- or not -- interpolation along the shortest arc give different results.
+        q0 = torch.as_tensor([1,0,0,0], dtype=torch.float)
+        q1 = -torch.as_tensor([1,1,0,0], dtype=torch.float)
+        q1 /= torch.norm(q1, keepdim=True)
+        steps = torch.linspace(0, 1.0, 3)
+
+        q05 = q0 + q1
+        q05 /= torch.norm(q05, keepdim=True)
+        q = roma.utils.unitquat_slerp(q0, q1, steps, shortest_arc=False)
+        self.assertTrue(is_close(q, torch.stack((q0, q05, q1))))
+
+        # Interpolation along the shortest arc
+        q05m = q0 - q1
+        q05m /= torch.norm(q05m, keepdim=True)
+        q = roma.utils.unitquat_slerp(q0, q1, steps, shortest_arc=True)
+        self.assertTrue(is_close(q, torch.stack((q0, q05m, -q1))))
+
     def test_composition(self):
         for dtype in (torch.float32, torch.float64):
             R_list = [roma.random_rotmat(dtype=dtype) for _ in range(3)]

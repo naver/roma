@@ -230,13 +230,19 @@ def rotvec_to_unitquat(rotvec):
     quat[:, 3] = torch.cos(norms / 2)
     return roma.internal.unflatten_batch_dims(quat, batch_shape)
 
-def unitquat_to_rotvec(quat):
+def unitquat_to_rotvec(quat, shortest_arc=True):
     """
     Converts unit quaternion into rotation vector representation.
-    
+
+    Based on the representation of a rotation of angle :math:`{\\theta}` and unit axis :math:`(x,y,z)` 
+    by the unit quaternions :math:`\pm [\sin({\\theta} / 2) (x i + y j + z k) + \cos({\\theta} / 2)]`.
+
     Args:
         quat (...x4 tensor, XYZW convention): batch of unit quaternions.
             No normalization is applied before computation.
+        shortest_arc (bool): if True, the function returns the smallest rotation vectors corresponding 
+            to the input 3D rotations, i.e. rotation vectors with a norm smaller than :math:`\pi`.
+            If False, the function may return rotation vectors of norm larger than :math:`\pi`, depending on the sign of the input quaternions.
     Returns:
         batch of rotation vectors (...x3 tensor).
     """
@@ -245,10 +251,11 @@ def unitquat_to_rotvec(quat):
     quat = quat.clone()
     # Adapted from SciPy:
     # https://github.com/scipy/scipy/blob/adc4f4f7bab120ccfab9383aba272954a0a12fb0/scipy/spatial/transform/rotation.py#L1006-L1073
-    # Enforce w > 0 to ensure 0 <= angle <= pi
-    quat[quat[:, 3] < 0] *= -1
+    if shortest_arc:
+        # Enforce w > 0 to ensure 0 <= angle <= pi
+        quat[quat[:, 3] < 0] *= -1
     angle = 2 * torch.atan2(torch.norm(quat[:, :3], dim=1), quat[:, 3])
-    small_angle = (angle <= 1e-3)
+    small_angle = (torch.abs(angle) <= 1e-3)
     large_angle = ~small_angle
 
     num_rotations = len(quat)

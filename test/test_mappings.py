@@ -6,6 +6,7 @@
 import unittest
 import torch
 import roma
+import numpy as np
 from test.utils import is_close
 
 def is_close(A, B, eps1 = 1e-5, eps2 = 1e-5):
@@ -68,17 +69,47 @@ class TestMappings(unittest.TestCase):
         batch_size = 100
         for dtype in (torch.float32, torch.float64):
             x = 10 * torch.randn((batch_size, 3), dtype=dtype, device=device)
-            #Forward mapping
+            #Forward mapping.
             q = roma.rotvec_to_unitquat(x)
+            # Ensure that the output is a valid unit quaternion.
             self.assertEqual(q.shape, (batch_size, 4))
             self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1) < 1e-6))
+
             # Backward mapping
             xbis = roma.unitquat_to_rotvec(q)
             qbis = roma.rotvec_to_unitquat(xbis)
+            # Ensure cyclic consistency of the mappings
             self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 1e-6))
             xter = roma.unitquat_to_rotvec(qbis)
             self.assertTrue(is_close(xbis, xter))
-        
+
+
+    def test_unitquat_to_rotvec(self):
+        torch.manual_seed(666)
+        batch_size = 100
+        for dtype in (torch.float32, torch.float64):
+            q = roma.random_unitquat(batch_size, dtype)
+            xp = roma.unitquat_to_rotvec(q, shortest_arc=True)
+            xm = roma.unitquat_to_rotvec(-q, shortest_arc=True)
+            self.assertEqual(xp.shape, (batch_size, 3))
+            self.assertTrue(is_close(xp, xm))
+            self.assertTrue(torch.all(torch.norm(xp, dim=-1) <= np.pi))
+
+            # Mappings from q and -q should give different results in general when shortest_arc==False
+            xpn = roma.unitquat_to_rotvec(q, shortest_arc=False)
+            xmn = roma.unitquat_to_rotvec(-q, shortest_arc=False)
+            self.assertFalse(any([is_close(xpn[i], xmn[i]) for i in range(batch_size)]))
+
+            # However, the result should be similar when shortest_arc==True
+            xpn = roma.unitquat_to_rotvec(q, shortest_arc=True)
+            xmn = roma.unitquat_to_rotvec(-q, shortest_arc=True)
+            self.assertTrue(is_close(xpn, xmn))
+
+            # Ensure cyclic consistency of the mappings in any case
+            for x in xp, xm, xpn, xmn:
+                qbis = roma.rotvec_to_unitquat(x)
+                self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 5e-6))
+
     def test_rotvec_rotmat(self):
         torch.manual_seed(666)
         batch_size = 100
@@ -129,9 +160,7 @@ class TestMappings(unittest.TestCase):
             self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1) < 1e-6))
 
     def test_rotvec_rotmat_nan_issues(self):
-        """
-        Check that casting using rotation vectors does not lead to non finite values with 0 angles.
-        """
+        # Check that casting rotation vectors to rotation matrices does not lead to non finite values with 0 angles.
         rotvec = torch.zeros(3, requires_grad=True)
         R = roma.rotvec_to_rotmat(rotvec)
         loss = torch.sum(R)

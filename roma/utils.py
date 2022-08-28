@@ -252,14 +252,14 @@ def rotmat_composition(sequence, normalize = False):
         result = roma.mappings.special_procrustes(result)
     return result
 
-def unitquat_slerp(q0, q1, steps, shortest_path=False):
+def unitquat_slerp(q0, q1, steps, shortest_arc=True):
     """
     Spherical linear interpolation between two unit quaternions.
     
     Args: 
         q0, q1 (Ax4 tensor): batch of unit quaternions (A may contain multiple dimensions).
         steps (tensor of shape B): interpolation steps, 0.0 corresponding to q0 and 1.0 to q1 (B may contain multiple dimensions).
-        shortest_path (boolean): if True, interpolation will be performed along the shortest path on SO(3).
+        shortest_arc (boolean): if True, interpolation will be performed along the shortest arc on SO(3) from `q0` to `q1` or `-q1`.
     Returns: 
         batch of interpolated quaternions (BxAx4 tensor).
     Note:
@@ -267,12 +267,9 @@ def unitquat_slerp(q0, q1, steps, shortest_path=False):
         one should keep in mind that spherical interpolation is not necessarily performed along the shortest arc,
         depending on the sign of ``torch.sum(q0*q1,dim=-1)``.
     """
-    if shortest_path:
-        # Flip some quaternions to ensure the shortest path interpolation
-        q1 = -torch.sign(torch.sum(q0*q1, dim=-1, keepdim=True)) * q1
     # Relative rotation
     rel_q = quat_product(quat_conjugation(q0), q1)
-    rel_rotvec = roma.mappings.unitquat_to_rotvec(rel_q)
+    rel_rotvec = roma.mappings.unitquat_to_rotvec(rel_q, shortest_arc=shortest_arc)
     # Relative rotations to apply
     rel_rotvecs = steps.reshape(steps.shape + (1,) * rel_rotvec.dim()) * rel_rotvec.reshape((1,) * steps.dim() + rel_rotvec.shape)
     rots = roma.mappings.rotvec_to_unitquat(rel_rotvecs.reshape(-1, 3)).reshape(*rel_rotvecs.shape[:-1], 4)
@@ -291,7 +288,7 @@ def rotvec_slerp(rotvec0, rotvec1, steps):
     """
     q0 = roma.mappings.rotvec_to_unitquat(rotvec0)
     q1 = roma.mappings.rotvec_to_unitquat(rotvec1)
-    interpolated_q = unitquat_slerp(q0, q1, steps, shortest_path=True)
+    interpolated_q = unitquat_slerp(q0, q1, steps, shortest_arc=True)
     return roma.mappings.unitquat_to_rotvec(interpolated_q)
 
 def rotmat_slerp(R0, R1, steps):
@@ -306,7 +303,7 @@ def rotmat_slerp(R0, R1, steps):
     """    
     q0 = roma.mappings.rotmat_to_unitquat(R0)
     q1 = roma.mappings.rotmat_to_unitquat(R1)
-    interpolated_q = unitquat_slerp(q0, q1, steps, shortest_path=True)
+    interpolated_q = unitquat_slerp(q0, q1, steps, shortest_arc=True)
     return roma.mappings.unitquat_to_rotmat(interpolated_q)
 
 def rigid_vectors_registration(x, y):
