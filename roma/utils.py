@@ -203,6 +203,28 @@ def quat_composition(sequence, normalize = False):
         q = q / torch.norm(q, dim=-1, keepdim=True)
     return res
 
+def quat_action(q, v, is_normalized=False):
+    """
+    Rotate a 3D vector :math:`v=(x,y,z)` by a rotation represented by a quaternion `q`.
+
+    Based on the action by conjugation :math:`q,v : q v q^{-1}`, considering the pure quaternion :math:`v=xi + yj +zk` by abuse of notation.
+
+    Args:
+        q (...x4 tensor, XYZW convention): batch of quaternions.
+        v (...x3 tensor): batch of 3D vectors.
+        is_normalized: use True if the input quaternions are already normalized, to avoid unnecessary computations.
+    Returns:
+        batch of rotated 3D vectors (...x3 tensor).
+    Note:
+        One should favor rotation matrix representation to rotate multiple vectors by the same rotation efficiently.
+
+    """
+    batch_shape = v.shape[:-1]
+    iquat = quat_conjugation(q) if is_normalized else quat_inverse(q)
+    pure = torch.cat((v, torch.zeros(batch_shape + (1,))), dim=-1)
+    res = quat_product(q, quat_product(pure, iquat))
+    return res[...,:3]
+
 def rotvec_inverse(rotvec):
     """
     Returns the inverse of the input rotation expressed using rotation vector representation.

@@ -96,6 +96,26 @@ class TestUtils(unittest.TestCase):
             q_id = roma.rotvec_to_unitquat(torch.zeros(1,3))
             self.assertTrue(is_close(q_id, roma.quat_product(q, iq)))
             self.assertTrue(is_close(q_id, roma.quat_product(iq, q)))
+
+    def test_quat_action(self):
+        batch_size=100
+        for dtype in (torch.float32, torch.float64):
+            q = torch.randn(batch_size, 4)
+            v = torch.randn(batch_size, 3)
+            vrot0 = roma.quat_action(q, v)
+
+            # Check that results are consistent with respect to quaternion normalization
+            q_normalized = q / torch.norm(q, dim=-1, keepdim=True)
+            vrot1 = roma.quat_action(q_normalized, v, is_normalized=True)
+            vrot2 = roma.quat_action(q_normalized, v, is_normalized=False)
+
+            self.assertTrue(is_close(vrot0, vrot1))
+            self.assertTrue(is_close(vrot1, vrot2))
+
+            # Check that results are consistent with rotation using a rotation matrix
+            R = roma.unitquat_to_rotmat(q_normalized)
+            vrotR = torch.einsum('bik, bk -> bi', R, v)
+            self.assertTrue(is_close(vrot1, vrotR))
         
     def test_slerp(self):
         for dtype in (torch.float32, torch.float64):
