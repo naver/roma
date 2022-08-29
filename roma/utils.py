@@ -51,13 +51,20 @@ def random_unitquat(size = tuple(), dtype=torch.float, device=None):
         size (tuple or int): batch size. Use for example ``tuple()`` to generate a single element, and ``(5,2)`` to generate a 5x2 batch.
     Returns:
         batch of unit quaternions (size x 4 tensor).
+
+    Reference:
+        K. Shoemake, “Uniform Random Rotations”, in Graphics Gems III (IBM Version), Elsevier, 1992, pp. 124–132. doi: 10.1016/B978-0-08-050755-2.50036-1.
+
     """
     if type(size) == int:
         size = (size,)
-    quat = torch.randn(size + (4,), dtype=dtype, device=device)
-    quat /= torch.norm(quat, dim=-1, keepdim=True)
-    assert(torch.all( torch.abs(torch.norm(quat, dim=-1) - 1) < 1e-3 ))
-    return quat
+
+    x0 = torch.rand(size, dtype=dtype, device=device)
+    theta1 = (2.0 * np.pi) * torch.rand(size)
+    theta2 = (2.0 * np.pi) * torch.rand(size)
+    r1 = torch.sqrt(1.0 - x0)
+    r2 = torch.sqrt(x0)
+    return torch.stack((r1 * torch.sin(theta1), r1 * torch.cos(theta1), r2 * torch.sin(theta2), r2 * torch.cos(theta2)), dim=-1)
 
 def random_rotmat(size  = tuple(), dtype=torch.float, device=None):
     """

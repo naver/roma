@@ -48,6 +48,35 @@ class TestUtils(unittest.TestCase):
             geo_dist_naive = roma.rotmat_geodesic_distance_naive(M @ R, M @ I[None,:,:])
             self.assertTrue(is_close(torch.abs(alpha), geo_dist_naive))
         
+    def test_random_unitquat(self):
+        q = roma.random_unitquat((3,5))
+        self.assertTrue(q.shape == (3,5,4))
+
+        batch_size = 100000
+        repetitions = 10
+        torch.manual_seed(565441)
+        for _ in range(10):
+            for dtype in (torch.float32, torch.float64):
+                # Sample multiple times a batch of random quaternions
+                q = torch.cat([roma.random_unitquat(batch_size, dtype=dtype) for _ in range(repetitions)], dim=0)
+                size = repetitions * batch_size
+                self.assertTrue(q.shape == (size, 4))
+
+                # Ensure that the generated quaternions are of unit norm
+                self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1.0) < 1e-6))
+
+                # If the distribution is uniform, the mean quaternion should be close to 0
+                # (we use a constant random seed for this test, otherwise it could fail in some unlikely cases).
+                mean = torch.mean(q, dim=0)
+                self.assertTrue(torch.norm(mean) < 10.0 / np.sqrt(size))
+
+                # There should be approximately as many quaternions on both sides of a random hyperplane going through 0.
+                for _ in range(5):
+                    axis = torch.randn((size, 4), dtype=dtype)
+                    axis /= torch.norm(axis, dim=-1, keepdim=True)
+                    count_difference = torch.sum(torch.sign(torch.sum(axis * q, dim=-1)))
+                    self.assertTrue(torch.abs(count_difference) < 10.0 * np.sqrt(size))
+
     def test_unitquat(self):
         batch_size = 100
         for dtype in (torch.float32, torch.float64):
