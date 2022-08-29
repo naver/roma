@@ -223,6 +223,10 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.3.0:
+    - Added :func:`roma.utils.quat_action()`.
+    - Change of underlying algorithm for :func:`~roma.utils.random_unitquat()` to avoid potential divisions by 0.
+    - Fix of :func:`roma.utils.unitquat_slerp()` which was always performing interpolation along the shortest arc regardless of the value of the ``shortest_path`` argument (renamed ``shortest_arc`` in the new version).
 Version 1.2.7:
     - Fix of :func:`~roma.internal.unflatten_batch_dims()` to ensure compatibility with PyTorch 1.6.0.
     - Fix of :func:`~symmatrixvec_to_unitquat()` that was not producing a lower triangular matrix.
