@@ -44,6 +44,9 @@ class TestMappings(unittest.TestCase):
                 self.assertTrue(roma.is_orthonormal_matrix(R, 1e-5))
                 Rbis = roma.procrustes(R)
                 self.assertTrue(is_close(R, Rbis))
+                # Ensure consistency
+                Rter = roma.procrustes_naive(M)
+                self.assertTrue(is_close(R, Rter))
             
     def test_special_procrustes(self):
         torch.manual_seed(666)
@@ -54,6 +57,9 @@ class TestMappings(unittest.TestCase):
                 self.assertTrue(roma.is_rotation_matrix(R, 1e-5))
                 Rbis = roma.special_procrustes(R)
                 self.assertTrue(is_close(R, Rbis))
+                # Ensure consistency
+                Rter = roma.special_procrustes_naive(M)
+                self.assertTrue(is_close(R, Rter))
             
     def test_special_gramschmidt(self):
         torch.manual_seed(666)

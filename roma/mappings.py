@@ -21,10 +21,6 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
             # We flip the smallest singular value to ensure getting a rotation matrix
             with torch.no_grad():
                 flip = (torch.det(U) * torch.det(V) < 0)
-                #flip = (fast_det_3x3(U) * fast_det_3x3(V) < 0)
-            if torch.is_grad_enabled():
-                # This is needed to avoid a runtime error "one of the variables needed for gradient computation has been modified by an inplace operation"
-                SVt = DVt.clone()
             SVt[flip,-1,:] *= -1
         else:
             flip = None
@@ -106,16 +102,16 @@ def procrustes_naive(M, force_rotation : bool = False):
     assert (M.dim() == 3 and M.shape[1] == M.shape[2]), "Input should be a BxDxD batch of matrices."
     U, D, V = roma.internal.svd(M)
     # D is sorted in descending order
-    DVt = V.transpose(-1,-2)
+    SVt = V.transpose(-1,-2)
     if force_rotation:
         # We flip the smallest singular value to ensure getting a rotation matrix
         with torch.no_grad():
             flip = (torch.det(U) * torch.det(V) < 0)
         if torch.is_grad_enabled():
             # This is needed to avoid a runtime error "one of the variables needed for gradient computation has been modified by an inplace operation"
-            DVt = DVt.clone()
-        DVt[flip,-1,:] *= -1
-    R = U @ DVt
+            SVt = SVt.clone()
+        SVt[flip,-1,:] *= -1
+    R = U @ SVt
     return roma.internal.unflatten_batch_dims(R, batch_shape)
 
 

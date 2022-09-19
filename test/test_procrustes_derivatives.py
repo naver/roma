@@ -22,7 +22,9 @@ class TestProcrustesDerivatives(unittest.TestCase):
         eps = 1e-7
         eps2 = 1e-4
         for func in (lambda x : roma.procrustes(x),
-                    lambda x : roma.special_procrustes(x),):
+                    lambda x : roma.special_procrustes(x),
+                    lambda x: roma.procrustes_naive(x),
+                    lambda x: roma.special_procrustes_naive(x)):
             # Numerical gradient
             num = utils.numerical_jacobian(func, M, eps)
             auto = utils.automatic_jacobian(func, M)
