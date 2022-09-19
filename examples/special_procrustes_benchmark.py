@@ -37,6 +37,11 @@ def profile(func, label):
     print("-Max (ms)", np.max(durations))
     return durations
 
+if not roma.is_torch_batch_svd_available():
+    print("Error: The 'torch_batch_svd' module should be installed to run this benchmark.")
+    exit()
+
+
 torch.manual_seed(0)
 device = torch.device(0) if torch.cuda.is_available() else torch.device('cpu')
 torch.backends.cudnn.benchmark = True

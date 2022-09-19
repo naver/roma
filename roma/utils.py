@@ -11,6 +11,12 @@ import numpy as np
 import roma.internal
 import roma.mappings
 
+def is_torch_batch_svd_available() -> bool:
+    """
+    Returns True if the module 'torch_batch_svd' has been loaded. Returns False otherwise.
+    """
+    return roma.internal._IS_TORCH_BATCH_SVD_AVAILABLE
+
 def is_orthonormal_matrix(R, epsilon=1e-7):
     """
     Test if matrices are orthonormal.
@@ -295,6 +301,8 @@ def unitquat_slerp(q0, q1, steps, shortest_arc=True):
         When considering quaternions as rotation representations,
         one should keep in mind that spherical interpolation is not necessarily performed along the shortest arc,
         depending on the sign of ``torch.sum(q0*q1,dim=-1)``.
+
+        Behavior is undefined when using ``shortest_arc=False`` with antipodal quaternions.
     """
     # Relative rotation
     rel_q = quat_product(quat_conjugation(q0), q1)
@@ -304,6 +312,47 @@ def unitquat_slerp(q0, q1, steps, shortest_arc=True):
     rots = roma.mappings.rotvec_to_unitquat(rel_rotvecs.reshape(-1, 3)).reshape(*rel_rotvecs.shape[:-1], 4)
     interpolated_q = quat_product(q0.reshape((1,) * steps.dim() + q0.shape).repeat(steps.shape + (1,) * q0.dim()), rots)
     return interpolated_q
+
+def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
+    """
+    Spherical linear interpolation between two unit quaternions.
+    This function requires less computations than :func:`roma.utils.unitquat_slerp`,
+    but is **unsuitable for extrapolation (i.e.** ``steps`` **must be within [0,1])**.
+
+    Args: 
+        q0, q1 (Ax4 tensor): batch of unit quaternions (A may contain multiple dimensions).
+        steps (tensor of shape B): interpolation steps within 0.0 and 1.0, 0.0 corresponding to q0 and 1.0 to q1 (B may contain multiple dimensions).
+        shortest_arc (boolean): if True, interpolation will be performed along the shortest arc on SO(3) from `q0` to `q1` or `-q1`.
+    Returns: 
+        batch of interpolated quaternions (BxAx4 tensor).
+    """
+    q0, batch_shape = roma.internal.flatten_batch_dims(q0, end_dim=-2)
+    q1, batch_shape1 = roma.internal.flatten_batch_dims(q1, end_dim=-2)
+    assert batch_shape == batch_shape1
+    # omega is the 'angle' between both quaternions
+    cos_omega = torch.sum(q0 * q1, dim=-1)
+    if shortest_arc:
+        # Flip some quaternions to perform shortest arc interpolation.
+        q1 = q1.clone()
+        q1[cos_omega < 0,:] *= -1
+        cos_omega = torch.abs(cos_omega)
+    # True when q0 and q1 are close.
+    nearby_quaternions = cos_omega > (1.0 - 1e-3)
+
+    cos_omega = cos_omega.reshape((1,) * steps.dim() + (-1,1))
+    s = steps.reshape(steps.shape + (1,1))
+    # General approach    
+    omega = torch.arccos(cos_omega)
+    alpha = torch.sin((1-s)*omega)
+    beta = torch.sin(s*omega)
+    # Use linear interpolation for nearby quaternions
+    alpha[..., nearby_quaternions, :] = 1 - s
+    beta[..., nearby_quaternions, :] = s
+    # Interpolation
+    q = alpha * q0.reshape((1,) * steps.dim() + q0.shape) + beta * q1.reshape((1,) * steps.dim() + q1.shape)
+    # Normalization of the output
+    q /= torch.norm(q, dim=-1, keepdim=True)
+    return q.reshape(steps.shape + batch_shape + (4,))
     
 def rotvec_slerp(rotvec0, rotvec1, steps):
     """

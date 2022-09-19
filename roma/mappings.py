@@ -241,6 +241,9 @@ def unitquat_to_rotvec(quat, shortest_arc=True):
             If False, the function may return rotation vectors of norm larger than :math:`\pi`, depending on the sign of the input quaternions.
     Returns:
         batch of rotation vectors (...x3 tensor).
+    Note:
+        Behavior is undefined for inputs ``quat=torch.as_tensor([0.0, 0.0, 0.0, -1.0])`` and ``shortest_arc=False``, 
+        as any rotation vector of angle :math:`2 \pi` could be a valid representation in such case.
     """
     quat, batch_shape = roma.internal.flatten_batch_dims(quat, end_dim=-2)
     # We perform a copy to support auto-differentiation.
@@ -248,9 +251,11 @@ def unitquat_to_rotvec(quat, shortest_arc=True):
     # Adapted from SciPy:
     # https://github.com/scipy/scipy/blob/adc4f4f7bab120ccfab9383aba272954a0a12fb0/scipy/spatial/transform/rotation.py#L1006-L1073
     if shortest_arc:
-        # Enforce w > 0 to ensure 0 <= angle <= pi
+        # Enforce w > 0 to ensure 0 <= angle <= pi.
+        # (Otherwise angle can be arbitrary within ]-2pi, 2pi]).
         quat[quat[:, 3] < 0] *= -1
-    angle = 2 * torch.atan2(torch.norm(quat[:, :3], dim=1), quat[:, 3])
+    half_angle = torch.atan2(torch.norm(quat[:, :3], dim=1), quat[:, 3])
+    angle = 2 * half_angle
     small_angle = (torch.abs(angle) <= 1e-3)
     large_angle = ~small_angle
 
@@ -259,7 +264,7 @@ def unitquat_to_rotvec(quat, shortest_arc=True):
     scale[small_angle] = (2 + angle[small_angle] ** 2 / 12 +
                           7 * angle[small_angle] ** 4 / 2880)
     scale[large_angle] = (angle[large_angle] /
-                          torch.sin(angle[large_angle] / 2))
+                          torch.sin(half_angle[large_angle]))
 
     rotvec = scale[:, None] * quat[:, :3]
     return roma.internal.unflatten_batch_dims(rotvec, batch_shape)

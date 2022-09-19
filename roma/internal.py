@@ -11,9 +11,12 @@ import torch
 try:
     import torch_batch_svd
     _fast_gpu_svd = torch_batch_svd.svd
+    _IS_TORCH_BATCH_SVD_AVAILABLE = True
 except ModuleNotFoundError:
-    if torch.cuda.is_available():
-        print("WARNING: torch_batch_svd (https://github.com/KinglittleQ/torch-batch-svd) is not installed and is required for maximum efficiency of special_procrustes. Using torch.svd as a fallback.")
+    # torch_batch_svd (https://github.com/KinglittleQ/torch-batch-svd) is not installed
+    # and is required for maximum efficiency of special_procrustes using GPUs.
+    # Using torch.svd as a fallback.
+    _IS_TORCH_BATCH_SVD_AVAILABLE = False
     _fast_gpu_svd = torch.svd
 
 def flatten_batch_dims(tensor, end_dim):

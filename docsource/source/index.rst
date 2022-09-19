@@ -12,12 +12,11 @@ The easiest way to install *RoMa* is to use pip::
 
 We also recommend installing `torch-batch-svd <https://github.com/KinglittleQ/torch-batch-svd>`_
 to achieve significant speed-up with :func:`~roma.mappings.procrustes` on a CUDA GPU (see section :ref:`Why a new library?`).
+You can check that this module is properly loaded using the function :func:`~roma.utils.is_torch_batch_svd_available()`.
 
 Alternatively one can install the latest version of *RoMa* directly from the source repository::
 
     pip install git+https://github.com/naver/roma
-
-or include the source repository (https://github.com/naver/roma) as a Git submodule.  
 
 ..  contents::
         :depth: 3     
@@ -223,6 +222,11 @@ Please cite this work in your publications:
 
 Changelog
 ==========
+Version 1.3.1:
+    - Removed spurious code in :func:`~roma.mappings.procrustes()`.
+    - Replaced warning about missing 'torch_batch_svd' module by a test function: :func:`~roma.utils.is_torch_batch_svd_available()`.
+    - Added :func:`roma.utils.unitquat_slerp_fast()`.
+    - Improved documentation and tests.
 Version 1.3.0:
     - Added :func:`roma.utils.quat_action()`.
     - Change of underlying algorithm for :func:`~roma.utils.random_unitquat()` to avoid potential divisions by 0.

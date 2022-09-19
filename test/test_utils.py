@@ -180,6 +180,26 @@ class TestUtils(unittest.TestCase):
         q = roma.utils.unitquat_slerp(q0, q1, steps, shortest_arc=True)
         self.assertTrue(is_close(q, torch.stack((q0, q05m, -q1))))
 
+    def test_slerp_consistency(self):
+        # Test consistency between both slerp methods.
+        for batch_shape in [(3,), (10, 20), (3, 14, 7)]:
+            for steps_shape in [(6,), (4,2,), (3,2,1)]:
+                for shortest_arc in (True, False):
+                    q0 = roma.random_unitquat(batch_shape)
+                    q1 = roma.random_unitquat(batch_shape)
+                    steps = torch.rand(steps_shape)
+                    q = roma.unitquat_slerp(q0, q1, steps=steps, shortest_arc=shortest_arc)
+                    qbis = roma.unitquat_slerp_fast(q0, q1, steps=steps, shortest_arc=shortest_arc)
+                    self.assertTrue(q.shape == steps_shape + batch_shape + (4,))
+                    self.assertTrue(is_close(q, qbis))
+                    # Same tests with nearby rotations
+                    q1 = q0 + 1e-3 * torch.randn_like(q0)
+                    q1 /= torch.norm(q1, dim=-1, keepdim=True)
+                    q = roma.unitquat_slerp(q0, q1, steps=steps, shortest_arc=shortest_arc)
+                    qbis = roma.unitquat_slerp_fast(q0, q1, steps=steps, shortest_arc=shortest_arc)
+                    self.assertTrue(q.shape == steps_shape + batch_shape + (4,))
+                    self.assertTrue(is_close(q, qbis))            
+
     def test_composition(self):
         for dtype in (torch.float32, torch.float64):
             R_list = [roma.random_rotmat(dtype=dtype) for _ in range(3)]
