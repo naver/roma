@@ -1,8 +1,22 @@
 RoMa: A lightweight library to deal with 3D rotations in PyTorch.
 =================================================================
 
-*RoMa* (which stands for Rotation Manipulation) provides differentiable mappings between 3D rotation representations, mappings from Euclidean to rotation space, and various utilities related to rotations.
+*RoMa* (which stands for *Rotation Manipulation*) provides differentiable mappings between 3D rotation representations, mappings from Euclidean to rotation space, and various utilities related to rotations.
 It is implemented in PyTorch and aims to be an easy-to-use and reasonably efficient toolbox for Machine Learning and gradient-based optimization.
+
+
+| For a more in-depth discussion regarding differentiable mappings on the rotation space, please refer to:
+| **Romain Brégier, Deep Regression on Manifolds: A 3D Rotation Case Study.** in 2021 International Conference on 3D Vision (3DV), 2021. (https://arxiv.org/abs/2103.16317).
+
+Additionally, please cite this work if you use *RoMa* for your research:
+::
+
+    @inproceedings{bregier2021deepregression,
+        title={Deep Regression on Manifolds: a {3D} Rotation Case Study},
+        author={Br{\'e}gier, Romain},
+        journal={2021 International Conference on 3D Vision (3DV)},
+        year={2021}
+    }
 
 Installation
 ------------
@@ -202,23 +216,6 @@ License
 *RoMa*, Copyright (c) 2021 NAVER Corp., is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 license (see `license <https://github.com/naver/roma/blob/master/LICENSE>`_).
 
 Bits of code were adapted from SciPy. Documentation is generated, distributed and displayed with the support of Sphinx and other materials (see `notice <https://github.com/naver/roma/blob/master/NOTICE>`_).
-
-
-References
-==========
-For a more in-depth discussion regarding differentiable mappings on the rotation space, please refer to:
-
-**Romain Brégier, Deep Regression on Manifolds: A 3D Rotation Case Study.** in 2021 International Conference on 3D Vision (3DV), 2021. (https://arxiv.org/abs/2103.16317).
-
-Please cite this work in your publications:
-::
-
-    @inproceedings{bregier2021deepregression,
-        title={Deep Regression on Manifolds: a {3D} Rotation Case Study},
-        author={Br{\'e}gier, Romain},
-        journal={2021 International Conference on 3D Vision (3DV)},
-        year={2021}
-    }
 
 Changelog
 ==========
