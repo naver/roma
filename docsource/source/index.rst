@@ -219,6 +219,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.3.2:
+    - Simplified backpropagation pass for :func:`~roma.mappings.procrustes()`.
 Version 1.3.1:
     - Removed spurious code in :func:`~roma.mappings.procrustes()`.
     - Replaced warning about missing 'torch_batch_svd' module by a test function: :func:`~roma.utils.is_torch_batch_svd_available()`.

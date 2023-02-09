@@ -14,49 +14,44 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
     @staticmethod
     def forward(ctx, M, force_rotation, regularization, gradient_eps):
         assert (M.dim() == 3 and M.shape[1] == M.shape[2]), "Input should be a BxDxD batch of matrices."
+        # Singular values of D are sorted in descending order
         U, D, V = roma.internal.svd(M)
-        # D is sorted in descending order
-        SVt = V.transpose(-1,-2)
         if force_rotation:
             # We flip the smallest singular value to ensure getting a rotation matrix
             with torch.no_grad():
-                flip = (torch.det(U) * torch.det(V) < 0)
-            SVt[flip,-1,:] *= -1
+                flip = (torch.det(U) * torch.det(V) < 0)            
+            # in-place modifications of variables not used afterwards.
+            DS = D
+            DS[flip, -1] *= -1
+            del D
+            US = U
+            US[flip,:,-1] *= -1
+            del U
         else:
             flip = None
-        R = U @ SVt
-        # Store data for backprop
-        ctx.save_for_backward(U, D, V, flip, M, R)
+            DS = D
+            US = U
+        R = US @ V.transpose(-1, -2)
+        # Store data for backprop:
+        ctx.save_for_backward(US, DS, V, M, R)
         ctx.gradient_eps = gradient_eps
         ctx.regularization = regularization
         return R
 
     @staticmethod
     def backward(ctx, grad_R):
-        U, D, V, flip, M, R = ctx.saved_tensors
+        US, DS, V, M, R = ctx.saved_tensors
         gradient_eps = ctx.gradient_eps
 
-        Uik_Vjl = torch.einsum('bik,bjl -> bklij', U, V)
-        Uil_Vjk = Uik_Vjl.transpose(1,2)
-
-        Dl = D[:,None,:,None,None]
-        Dk = D[:,:,None,None,None]
-
-        # Default Omega
-        Omega_klij = (Uik_Vjl - Uil_Vjk) * roma.internal._pseudo_inverse(Dk + Dl, gradient_eps)
-        # Diagonal should already be 0 thanks to clamping even in case of rank deficient input
-        # Deal with flips (det(U) det(V) < 0)
-        if flip is not None:
-            # k!=d, l=d
-            Omega_klij[flip,:-1,-1,:,:] = (Uik_Vjl[flip,:-1,-1] - Uil_Vjk[flip,:-1,-1]) * roma.internal._pseudo_inverse(Dk[flip,:-1,-1] - Dl[flip,:,-1], gradient_eps)
-            
-            # k=d, l!=d
-            Omega_klij[flip,-1,:-1,:,:] = -Omega_klij[flip,:-1,-1,:,:]
+        USik_Vjl = torch.einsum('bik,bjl -> bklij', US, V)
+        USil_Vjk = USik_Vjl.transpose(1,2)
+        DSl = DS[:,None,:,None,None]
+        DSk = DS[:,:,None,None,None]
+        Omega_klij = (USik_Vjl - USil_Vjk) * roma.internal._pseudo_inverse(DSk + DSl, gradient_eps)
+        # Note: this intermediary matrix may require lots of memory for large dimensional cases.
+        # Diagonal k==l should always be 0 thanks to the clamping of the pseudo-inverse.
         
-        UOmega = torch.einsum('bkm, bmlij -> bklij', U, Omega_klij)
-        Janalytical = torch.einsum('bkmij, bml -> bklij', UOmega, V.transpose(-1,-2))
-        grad_M = torch.einsum('bkl, bklij -> bij', grad_R, Janalytical)
-
+        grad_M = torch.einsum('bnm, bnk, bklij, bml -> bij', grad_R, US, Omega_klij, V)
         if ctx.regularization != 0.0:
             # Add a regularization term in the direction of the orthonormalized output.
             grad_M += ctx.regularization * (M - R)
