@@ -66,8 +66,8 @@ def random_unitquat(size = tuple(), dtype=torch.float, device=None):
         size = (size,)
 
     x0 = torch.rand(size, dtype=dtype, device=device)
-    theta1 = (2.0 * np.pi) * torch.rand(size)
-    theta2 = (2.0 * np.pi) * torch.rand(size)
+    theta1 = (2.0 * np.pi) * torch.rand(size, dtype=dtype, device=device)
+    theta2 = (2.0 * np.pi) * torch.rand(size, dtype=dtype, device=device)
     r1 = torch.sqrt(1.0 - x0)
     r2 = torch.sqrt(x0)
     return torch.stack((r1 * torch.sin(theta1), r1 * torch.cos(theta1), r2 * torch.sin(theta2), r2 * torch.cos(theta2)), dim=-1)
@@ -384,32 +384,36 @@ def rotmat_slerp(R0, R1, steps):
     interpolated_q = unitquat_slerp(q0, q1, steps, shortest_arc=True)
     return roma.mappings.unitquat_to_rotmat(interpolated_q)
 
-def rigid_vectors_registration(x, y):
+def rigid_vectors_registration(x, y, weights=None):
     """
-    Returns the rotation matrix :math:`R` that best aligns an input list of vectors :math:`(x_i)_{i=1...n}` to a target list of vectors :math:`(y_i)_{i=1...n}`,
-    by minimizing the sum of square distance :math:`\sum_i \|R x_i - y_i\|^2`.
-
+    Returns the rotation matrix :math:`R` that best aligns an input list of vectors :math:`(x_i)_{i=1...n}` to a target list of vectors :math:`(y_i)_{i=1...n}`
+    by minimizing the sum of square distance :math:`\sum_i w_i \|R x_i - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
     See :func:`~roma.utils.rigid_points_registration` for details.
 
     Args:
         x (...xNxD tensor): list of N vectors of dimension D.
         y (...xNxD tensor): list of corresponding target vectors.
+        weights (None or ...xN tensor): optional list of weights associated to each vector.
     Returns:
         The rotation matrix :math:`R` (...xDxD tensor).
-    """    
-    M = torch.einsum("...ki, ...kj -> ...ij", y, x)
+    """
+    if weights is None:
+        M = torch.einsum("...ki, ...kj -> ...ij", y, x)
+    else:
+        M = torch.einsum("...k, ...ki, ...kj -> ...ij", weights, y, x)
     R = roma.special_procrustes(M)
     return R
 
-def rigid_points_registration(x, y):
+def rigid_points_registration(x, y, weights=None):
     """
     Returns the rigid transformation :math:`(R,t)` that best aligns an input list of points :math:`(x_i)_{i=1...n}` to a target list of points :math:`(y_i)_{i=1...n}`,
-    by minimizing the sum of square distance :math:`\sum_i \|R x_i + t - y_i\|^2`.
+    by minimizing the sum of square distance :math:`\sum_i w_i \|R x_i + t - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
     This is sometimes referred to as the Kabsch/Umeyama algorithm.
 
     Args:
         x (...xNxD tensor): list of N points of dimension D.
         y (...xNxD tensor): list of corresponding target points.
+        weights (None or ...xN tensor): optional list of weights associated to each point.
     Returns:
         a tuple :math:`(R, t)` consisting of a rotation matrix :math:`R` (...xDxD tensor) and a translation vector :math:`t` (...xD tensor).
 
@@ -419,13 +423,18 @@ def rigid_points_registration(x, y):
         W. Kabsch, "A solution for the best rotation to relate two sets of vectors". Acta Crystallographica, A32, 1976.
     """
     # Center data
-    xmean = torch.mean(x, dim=-2, keepdim=True)
-    ymean = torch.mean(y, dim=-2, keepdim=True)
+    if weights is None:
+        xmean = torch.mean(x, dim=-2, keepdim=True)
+        ymean = torch.mean(y, dim=-2, keepdim=True)
+    else:
+        normalized_weights = weights / torch.sum(weights, dim=-1, keepdim=True)
+        xmean = torch.sum(normalized_weights[...,None] * x, dim=-2, keepdim=True)
+        ymean = torch.sum(normalized_weights[...,None] * y, dim=-2, keepdim=True)
     xhat = x - xmean
     yhat = y - ymean
     
-    # Solve the problem
-    R = rigid_vectors_registration(xhat, yhat)
+    # Solve the vectors registration problem
+    R = rigid_vectors_registration(xhat, yhat, weights)
     t = (ymean - torch.einsum('...ik, ...jk -> ...ji', R, xmean)).squeeze(-2)
     return R, t
 

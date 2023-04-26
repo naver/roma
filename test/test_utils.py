@@ -222,25 +222,26 @@ class TestUtils(unittest.TestCase):
         batch_shape = (34, 16)
         n = 100
         for dtype in (torch.float32, torch.float64):
-            R_true = roma.random_rotmat(batch_shape, dtype=dtype)
-            X = torch.randn(batch_shape + (n, 3,), dtype=dtype)
-            Y = torch.einsum('...ik, ...jk -> ...ji', R_true, X)
-            R = roma.rigid_vectors_registration(X, Y)
-
-        self.assertTrue(is_close(R, R_true))
+            for weights in [None, torch.rand(size=batch_shape + (n,), dtype=dtype)]:
+                R_true = roma.random_rotmat(batch_shape, dtype=dtype)
+                X = torch.randn(batch_shape + (n, 3,), dtype=dtype)
+                Y = torch.einsum('...ik, ...jk -> ...ji', R_true, X)
+                R = roma.rigid_vectors_registration(X, Y, weights)
+                self.assertTrue(is_close(R, R_true))
 
     def test_rigid_point_registration(self):
         batch_shape = (34, 16)
         n = 100
         for dtype in (torch.float32, torch.float64):
-            R_true = roma.random_rotmat(batch_shape, dtype=dtype)
-            t_true = torch.randn(batch_shape + (3,), dtype=dtype)
-            X = torch.randn(batch_shape + (n, 3,), dtype=dtype)
-            Y = torch.einsum('...ik, ...jk -> ...ji', R_true, X) + t_true.unsqueeze(-2)
-            R, t = roma.rigid_points_registration(X, Y)
+            for weights in [None, torch.rand(size=batch_shape + (n,), dtype=dtype)]:
+                R_true = roma.random_rotmat(batch_shape, dtype=dtype)
+                t_true = torch.randn(batch_shape + (3,), dtype=dtype)
+                X = torch.randn(batch_shape + (n, 3,), dtype=dtype)
+                Y = torch.einsum('...ik, ...jk -> ...ji', R_true, X) + t_true.unsqueeze(-2)
+                R, t = roma.rigid_points_registration(X, Y, weights)
 
-            self.assertTrue(is_close(R, R_true))
-            self.assertTrue(is_close(t, t_true))
+                self.assertTrue(is_close(R, R_true))
+                self.assertTrue(is_close(t, t_true))
   
         
 if __name__ == "__main__":
