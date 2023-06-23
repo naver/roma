@@ -141,6 +141,19 @@ def rotmat_geodesic_distance_naive(R1, R2):
     cos = rotmat_cosine_angle(R)
     return torch.acos(torch.clamp(cos, -1.0, 1.0))
 
+
+def unitquat_geodesic_distance(q1, q2):
+    """
+    Returns the angular distance alpha between rotations represented by **unit** quaternions.
+    Based on the equality :math:`min |q_2 \pm q_1| = 2 |sin(alpha/4)|`.
+
+    Args:
+        q1, q2 (...x4 tensor, XYZW convention): batch of unit quaternions.
+    Returns:
+        batch of angles in radians (... tensor).
+    """
+    return 4.0 * torch.asin(0.5 * torch.min(torch.linalg.norm(q2 - q1, dim=-1), torch.linalg.norm(q2 + q1, dim=-1)))
+
 def quat_conjugation(quat):
     """
     Returns the conjugation of input batch of quaternions.
@@ -384,10 +397,10 @@ def rotmat_slerp(R0, R1, steps):
     interpolated_q = unitquat_slerp(q0, q1, steps, shortest_arc=True)
     return roma.mappings.unitquat_to_rotmat(interpolated_q)
 
-def rigid_vectors_registration(x, y, weights=None):
+def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
     """
-    Returns the rotation matrix :math:`R` that best aligns an input list of vectors :math:`(x_i)_{i=1...n}` to a target list of vectors :math:`(y_i)_{i=1...n}`
-    by minimizing the sum of square distance :math:`\sum_i w_i \|R x_i - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
+    Returns the rotation matrix :math:`R` and the optional scaling :math:`s` that best align an input list of vectors :math:`(x_i)_{i=1...n}` to a target list of vectors :math:`(y_i)_{i=1...n}`
+    by minimizing the sum of square distance :math:`\sum_i w_i \|s R x_i - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
     See :func:`~roma.utils.rigid_points_registration` for details.
 
     Args:
@@ -395,19 +408,34 @@ def rigid_vectors_registration(x, y, weights=None):
         y (...xNxD tensor): list of corresponding target vectors.
         weights (None or ...xN tensor): optional list of weights associated to each vector.
     Returns:
-        The rotation matrix :math:`R` (...xDxD tensor).
+        A tuple :math:`(R, t)` consisting of the rotation matrix :math:`R` (...xDxD tensor) and the scaling :math:`s` (... tensor) 
+        if :code:`compute_scaling==True`, the rotation matrix :math:`R` otherwise.
     """
     if weights is None:
-        M = torch.einsum("...ki, ...kj -> ...ij", y, x)
+        n = x.shape[-2]
+        M = torch.einsum("...ki, ...kj -> ...ij", y, x / n)
     else:
+        # Normalize weights
+        weights = weights / torch.sum(weights, dim=-1, keepdim=True)
         M = torch.einsum("...k, ...ki, ...kj -> ...ij", weights, y, x)
-    R = roma.special_procrustes(M)
-    return R
+    if compute_scaling:
+        R, DS = roma.special_procrustes(M, return_singular_values=True)
+        # Using notations from (Umeyema, IEEE TPAMI 1991).
+        DS_trace = torch.sum(DS, dim=-1)
+        if weights is None:
+            sigma2_x = torch.mean(torch.sum(torch.square(x), dim=-1), dim=-1)
+        else:
+            sigma2_x = torch.sum(weights * torch.sum(torch.square(x), dim=-1), dim=-1)    
+        scale = DS_trace / sigma2_x
+        return R, scale
+    else:
+        R = roma.special_procrustes(M)
+        return R
 
-def rigid_points_registration(x, y, weights=None):
+def rigid_points_registration(x, y, weights=None, compute_scaling=False):
     """
-    Returns the rigid transformation :math:`(R,t)` that best aligns an input list of points :math:`(x_i)_{i=1...n}` to a target list of points :math:`(y_i)_{i=1...n}`,
-    by minimizing the sum of square distance :math:`\sum_i w_i \|R x_i + t - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
+    Returns the rigid transformation :math:`(R,t)` and the optional scaling :math:`s` that best align an input list of points :math:`(x_i)_{i=1...n}` to a target list of points :math:`(y_i)_{i=1...n}`,
+    by minimizing the sum of square distance :math:`\sum_i w_i \|s R x_i + t - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
     This is sometimes referred to as the Kabsch/Umeyama algorithm.
 
     Args:
@@ -415,7 +443,10 @@ def rigid_points_registration(x, y, weights=None):
         y (...xNxD tensor): list of corresponding target points.
         weights (None or ...xN tensor): optional list of weights associated to each point.
     Returns:
-        a tuple :math:`(R, t)` consisting of a rotation matrix :math:`R` (...xDxD tensor) and a translation vector :math:`t` (...xD tensor).
+        a triplet :math:`(R, t, s)` consisting of a rotation matrix :math:`R` (...xDxD tensor), 
+        a translation vector :math:`t` (...xD tensor),
+        and a scaling :math:`s` (... tensor) if :code:`compute_scaling==True`.
+        Returns :math:`(R, t)` otherwise.
 
     References:
         S. Umeyama, “Least-squares estimation of transformation parameters between two point patterns,” IEEE Transactions on pattern analysis and machine intelligence, vol. 13, no. 4, Art. no. 4, 1991.        
@@ -434,7 +465,11 @@ def rigid_points_registration(x, y, weights=None):
     yhat = y - ymean
     
     # Solve the vectors registration problem
-    R = rigid_vectors_registration(xhat, yhat, weights)
-    t = (ymean - torch.einsum('...ik, ...jk -> ...ji', R, xmean)).squeeze(-2)
-    return R, t
-
+    if compute_scaling:
+        R, scale = rigid_vectors_registration(xhat, yhat, weights, compute_scaling=compute_scaling)
+        t = (ymean - torch.einsum('...ik, ...jk -> ...ji', scale[...,None, None] * R, xmean)).squeeze(-2)
+        return R, t, scale
+    else:
+        R = rigid_vectors_registration(xhat, yhat, weights, compute_scaling=compute_scaling)
+        t = (ymean - torch.einsum('...ik, ...jk -> ...ji', R, xmean)).squeeze(-2)
+        return R, t

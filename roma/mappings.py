@@ -22,7 +22,7 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
                 flip = (torch.det(U) * torch.det(V) < 0)            
             # in-place modifications of variables not used afterwards.
             DS = D
-            DS[flip, -1] *= -1
+            DS[flip,-1] *= -1
             del D
             US = U
             US[flip,:,-1] *= -1
@@ -36,10 +36,10 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
         ctx.save_for_backward(US, DS, V, M, R)
         ctx.gradient_eps = gradient_eps
         ctx.regularization = regularization
-        return R
+        return R, DS
 
     @staticmethod
-    def backward(ctx, grad_R):
+    def backward(ctx, grad_R, grad_DS):
         US, DS, V, M, R = ctx.saved_tensors
         gradient_eps = ctx.gradient_eps
 
@@ -52,12 +52,14 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
         # Diagonal k==l should always be 0 thanks to the clamping of the pseudo-inverse.
         
         grad_M = torch.einsum('bnm, bnk, bklij, bml -> bij', grad_R, US, Omega_klij, V)
+        # Gradient contribution from singular values
+        grad_M += (US * grad_DS[:,None,:]) @ V.transpose(-1, -2)
         if ctx.regularization != 0.0:
             # Add a regularization term in the direction of the orthonormalized output.
             grad_M += ctx.regularization * (M - R)
         return grad_M, None, None, None
 
-def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5):
+def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, return_singular_values : bool = False):
     """ 
     Returns the orthonormal matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`.
 
@@ -68,13 +70,19 @@ def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5):
             Using this regularization is equivalent to adding a term :math:`regularization * \| M - R \|_F^2` to the training loss function.
         gradient_eps (float > 0): small value used to enforce numerical stability during backpropagation.
     Returns:
-        batch of orthonormal matrices (...xNxN tensor).
+        batch of orthonormal matrices (...xNxN tensor) and optional singular values.
+        For advanced users, singular values of the SVD decomposition with sign flipping (... tensor) can optionally be returned by setting the argument :code:`return_singular_values` to :code:`True`.
     """
     M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
-    R = _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)
-    return roma.internal.unflatten_batch_dims(R, batch_shape)
+    R, DS = _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)
+    R = roma.internal.unflatten_batch_dims(R, batch_shape)
+    if not return_singular_values:
+        return R
+    else:
+        DS = roma.internal.unflatten_batch_dims(DS, batch_shape)
+        return R, DS
 
-def special_procrustes(M, regularization=0.0, gradient_eps=1e-5):
+def special_procrustes(M, regularization=0.0, gradient_eps=1e-5, return_singular_values : bool = False):
     """
     Returns the rotation matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`.
 
@@ -85,10 +93,12 @@ def special_procrustes(M, regularization=0.0, gradient_eps=1e-5):
         gradient_eps (float > 0): small value used to enforce numerical stability during backpropagation.
     Returns:
         batch of rotation matrices (...xNxN tensor).
-    """
-    return procrustes(M, True, regularization, gradient_eps)
+        For advanced users, singular values of the SVD decomposition with sign flipping (... tensor) can optionally be returned by setting the argument :code:`return_singular_values` to :code:`True`.
 
-def procrustes_naive(M, force_rotation : bool = False):
+    """
+    return procrustes(M, True, regularization, gradient_eps, return_singular_values)
+
+def procrustes_naive(M, force_rotation : bool = False, return_singular_values : bool = False):
     """
     Implementation of :func:`~roma.mappings.procrustes` relying on default backward pass of autograd and SVD decomposition.
     Could be slightly less stable than :func:`~roma.mappings.procrustes`.
@@ -107,15 +117,23 @@ def procrustes_naive(M, force_rotation : bool = False):
             SVt = SVt.clone()
         SVt[flip,-1,:] *= -1
     R = U @ SVt
-    return roma.internal.unflatten_batch_dims(R, batch_shape)
+    R = roma.internal.unflatten_batch_dims(R, batch_shape)
+    if not return_singular_values:
+        return R
+    else:
+        DS = D.clone()
+        if force_rotation:
+            DS[flip, -1] *= -1
+        del D
+        return R, DS
 
 
-def special_procrustes_naive(M):
+def special_procrustes_naive(M, return_singular_values : bool = False):
     """
     Implementation of :func:`~roma.mappings.special_procrustes` relying on default backward pass of autograd and SVD decomposition.
     Could be slightly less stable than :func:`~roma.mappings.special_procrustes`.
     """
-    return procrustes_naive(M, force_rotation=True)
+    return procrustes_naive(M, force_rotation=True, return_singular_values=return_singular_values)
 
 def special_gramschmidt(M, epsilon=0):
     """

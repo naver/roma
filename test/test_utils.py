@@ -47,7 +47,19 @@ class TestUtils(unittest.TestCase):
             
             geo_dist_naive = roma.rotmat_geodesic_distance_naive(M @ R, M @ I[None,:,:])
             self.assertTrue(is_close(torch.abs(alpha), geo_dist_naive))
-        
+
+    def test_unitquat_geodesic_distance(self):
+        batch_size = 100
+        for dtype in (torch.float32, torch.float64):
+            q1 = roma.random_unitquat(batch_size, dtype=dtype)
+            q2 = roma.random_unitquat(batch_size, dtype=dtype)
+            alpha_q = roma.unitquat_geodesic_distance(q1, q2)
+            # Ensure consistency between functions
+            R1 = roma.unitquat_to_rotmat(q1)
+            R2 = roma.unitquat_to_rotmat(q2)
+            alpha_R = roma.rotmat_geodesic_distance(R1, R2)
+            self.assertTrue(is_close(alpha_q, alpha_R))
+
     def test_random_unitquat(self):
         q = roma.random_unitquat((3,5))
         self.assertTrue(q.shape == (3,5,4))
@@ -229,6 +241,19 @@ class TestUtils(unittest.TestCase):
                 R = roma.rigid_vectors_registration(X, Y, weights)
                 self.assertTrue(is_close(R, R_true))
 
+    def test_rigid_vectors_registration_with_scale(self):
+        batch_shape = (34, 16)
+        n = 100
+        for dtype in (torch.float32, torch.float64):
+            for weights in [None, torch.rand(size=batch_shape + (n,), dtype=dtype)]:
+                R_true = roma.random_rotmat(batch_shape, dtype=dtype)
+                scale_true = torch.exp(torch.randn(size=batch_shape, dtype=dtype))
+                X = torch.randn(batch_shape + (n, 3,), dtype=dtype)
+                Y = scale_true[...,None, None] * torch.einsum('...ik, ...jk -> ...ji', R_true, X)
+                R, scale = roma.rigid_vectors_registration(X, Y, weights, compute_scaling=True)
+                self.assertTrue(is_close(R, R_true))
+                self.assertTrue(is_close(scale, scale_true))
+
     def test_rigid_point_registration(self):
         batch_shape = (34, 16)
         n = 100
@@ -242,7 +267,21 @@ class TestUtils(unittest.TestCase):
 
                 self.assertTrue(is_close(R, R_true))
                 self.assertTrue(is_close(t, t_true))
-  
+
+    def test_rigid_points_registration_with_scale(self):
+        batch_shape = (34, 16)
+        n = 100
+        for dtype in (torch.float32, torch.float64):
+            for weights in [None, torch.rand(size=batch_shape + (n,), dtype=dtype)]:
+                R_true = roma.random_rotmat(batch_shape, dtype=dtype)
+                t_true = torch.randn(batch_shape + (3,), dtype=dtype)
+                scale_true = torch.exp(torch.randn(size=batch_shape, dtype=dtype))
+                X = torch.randn(batch_shape + (n, 3,), dtype=dtype)
+                Y = scale_true[...,None, None] * torch.einsum('...ik, ...jk -> ...ji', R_true, X) + t_true.unsqueeze(-2)
+                R, t, scale = roma.rigid_points_registration(X, Y, weights, compute_scaling=True)
+                self.assertTrue(is_close(R, R_true))
+                self.assertTrue(is_close(t, t_true))
+                self.assertTrue(is_close(scale, scale_true))
         
 if __name__ == "__main__":
     unittest.main()

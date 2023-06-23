@@ -24,7 +24,12 @@ class TestProcrustesDerivatives(unittest.TestCase):
         for func in (lambda x : roma.procrustes(x),
                     lambda x : roma.special_procrustes(x),
                     lambda x: roma.procrustes_naive(x),
-                    lambda x: roma.special_procrustes_naive(x)):
+                    lambda x: roma.special_procrustes_naive(x),
+                    lambda x: roma.procrustes(x, return_singular_values=True)[1],
+                    lambda x: roma.special_procrustes(x, return_singular_values=True)[1],
+                    lambda x: roma.procrustes_naive(x, return_singular_values=True)[1],
+                    lambda x: roma.special_procrustes_naive(x, return_singular_values=True)[1],
+                    ):
             # Numerical gradient
             num = utils.numerical_jacobian(func, M, eps)
             auto = utils.automatic_jacobian(func, M)

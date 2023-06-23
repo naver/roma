@@ -219,6 +219,10 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.3.3:
+    - :func:`~roma.mappings.procrustes()` can optionally return singular values, for advanced uses.
+    - :func:`~roma.utils.rigid_points_registration()` and :func:`~roma.utils.rigid_vectors_registration()` can optionally return scaling estimations.
+    - Added :func:`unitquat_geodesic_distance()`.
 Version 1.3.2:
     - Simplified backpropagation of :func:`~roma.mappings.procrustes()`.
     - Support for optional weights in :func:`~roma.utils.rigid_points_registration()` and :func:`~roma.utils.rigid_vectors_registration()`.
