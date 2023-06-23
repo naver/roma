@@ -75,3 +75,13 @@ except (NameError, AttributeError):
         Batched eigenvalue decomposition. Only the lower part of the matrix is considered.
         """
         return torch.symeig(A, upper=False, eigenvectors=True)
+    
+# L2 normalization
+try:
+    torch.linalg.norm
+    def norm(x, dim=None, keepdim=False):
+        return torch.linalg.norm(x, dim=dim, keepdim=keepdim)
+except AttributeError:
+    # torch.linalg.norm was introduced in PyTorch 1.7, and torch.norm is deprecated.
+    def norm(x, dim=None, keepdim=False):
+        return torch.norm(x, dim=dim, keepdim=keepdim)

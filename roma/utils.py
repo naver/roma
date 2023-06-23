@@ -152,7 +152,7 @@ def unitquat_geodesic_distance(q1, q2):
     Returns:
         batch of angles in radians (... tensor).
     """
-    return 4.0 * torch.asin(0.5 * torch.min(torch.linalg.norm(q2 - q1, dim=-1), torch.linalg.norm(q2 + q1, dim=-1)))
+    return 4.0 * torch.asin(0.5 * torch.min(roma.internal.norm(q2 - q1, dim=-1), roma.internal.norm(q2 + q1, dim=-1)))
 
 def quat_conjugation(quat):
     """
