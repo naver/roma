@@ -24,13 +24,15 @@ The easiest way to install *RoMa* is to use pip::
 
     pip install roma
 
-We also recommend installing `torch-batch-svd <https://github.com/KinglittleQ/torch-batch-svd>`_
-to achieve significant speed-up with :func:`~roma.mappings.procrustes` on a CUDA GPU (see section :ref:`Why a new library?`).
-You can check that this module is properly loaded using the function :func:`~roma.utils.is_torch_batch_svd_available()`.
-
 Alternatively one can install the latest version of *RoMa* directly from the source repository::
 
     pip install git+https://github.com/naver/roma
+
+**For pytorch versions older than 1.8**, we recommend installing `torch-batch-svd <https://github.com/KinglittleQ/torch-batch-svd>`_
+to achieve a significant speed-up with :func:`~roma.mappings.procrustes` on CUDA GPUs (see section :ref:`Why a new library?`).
+You can check that this module is properly loaded using the function :func:`~roma.utils.is_torch_batch_svd_available()`.
+**With recent pytorch installations (torch>=1.8), torch-batch-svd is no longer needed or used.**
+
 
 ..  contents::
         :depth: 3     
@@ -173,15 +175,17 @@ Care for numerical precision
 
 
 Computation efficiency
-    *RoMa* favors code clarity, but aims to be reasonably efficient. 
+    *RoMa* favors code clarity, but aims to be reasonably efficient.
+
     In particular, for Procrustes orthonormalization it can use on NVidia GPUs a batched SVD decomposition
-    that provides orders of magnitude speed-ups for large batch sizes compared to vanilla ``torch.svd()``
-    (tested with random 3x3 matrices, PyTorch 1.7, a NVidia Tesla T4 GPU and CUDA 11.0).
+    that provides orders of magnitude speed-ups for large batch sizes compared to vanilla ``torch.svd()`` for PyTorch versions below 1.8.
+    The plot below was obtained for random 3x3 matrices, with PyTorch 1.7, a NVidia Tesla T4 GPU and CUDA 11.0.
+    *Note that recent versions of pytorch (>=1.8) integrate such speed up off-the-shelf.*
 
     .. image:: special_procrustes_benchmark.svg
 
 Syntactic sugar
-    *RoMa* aims to be easy-to-use with a simple syntax, and supports of an arbitrary number of batch dimensions to let its users focus on their applications.    
+    *RoMa* aims to be easy-to-use with a simple syntax, and support for an arbitrary number of batch dimensions to let users focus on their applications.    
 
 API Documentation
 =================
@@ -219,6 +223,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.3.4:
+    - Use default `torch.svd` with pytorch versions greater than 1.8 (efficiency issue compared to `torch_batch_svd` solved in this PR: https://github.com/pytorch/pytorch/pull/48436).
 Version 1.3.3:
     - :func:`~roma.mappings.procrustes()` can optionally return singular values, for advanced uses.
     - :func:`~roma.utils.rigid_points_registration()` and :func:`~roma.utils.rigid_vectors_registration()` can optionally return scaling estimations.

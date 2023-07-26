@@ -6,3 +6,5 @@ docs/
 dist/
 roma.egg-info/
 docs/.buildinfo
+htmlcov/
+.coverage

@@ -8,16 +8,33 @@ Set of functions for internal module use.
 
 import torch
 
-try:
-    import torch_batch_svd
-    _fast_gpu_svd = torch_batch_svd.svd
-    _IS_TORCH_BATCH_SVD_AVAILABLE = True
-except ModuleNotFoundError:
-    # torch_batch_svd (https://github.com/KinglittleQ/torch-batch-svd) is not installed
-    # and is required for maximum efficiency of special_procrustes using GPUs.
-    # Using torch.svd as a fallback.
-    _IS_TORCH_BATCH_SVD_AVAILABLE = False
-    _fast_gpu_svd = torch.svd
+# Default behavior: vanilla svd
+_IS_TORCH_BATCH_SVD_AVAILABLE = False
+svd = torch.svd
+# With PyTorch < 1.8,
+# we observed some significant speed-ups using torch_batch_svd (https://github.com/KinglittleQ/torch-batch-svd) instead of torch.svd on NVidia GPUs.
+# In more recent versions, torch.svd seems to have been fixed (https://github.com/pytorch/pytorch/pull/48436) and torch_batch_svd is no longer required.
+_torch_version = [int(s) for s in torch.__version__.split(".")]
+if  _torch_version[0] == 0 or (_torch_version[0] == 1 and _torch_version[1] < 8):
+    try:
+        import torch_batch_svd
+        _IS_TORCH_BATCH_SVD_AVAILABLE = True
+        def svd(M):
+            """
+            Singular Value Decomposition wrapper, using efficient batch decomposition on GPU.
+
+            Args:
+                M (BxMxN tensor): batch of real matrices.
+            Returns:
+                (U,D,V) decomposition, such as :math:`M = U @ diag(D) @ V^T`.
+            """
+            if M.is_cuda and M.shape[1] < 32 and M.shape[2] < 32:
+                return torch_batch_svd.svd(M)
+            else:
+                return torch.svd(M)
+    except ModuleNotFoundError:
+        pass
+del _torch_version
 
 def flatten_batch_dims(tensor, end_dim):
     """
@@ -44,20 +61,6 @@ def _pseudo_inverse(x, eps):
     inv = 1.0/x
     inv[torch.abs(x) < eps] = 0.0
     return inv    
-
-def svd(M):
-    """
-    Singular Value Decomposition wrapper, using efficient batch decomposition on GPU when available.
-
-    Args:
-        M (BxMxN tensor): batch of real matrices.
-    Returns:
-        (U,D,V) decomposition, such as :math:`M = U @ diag(D) @ V^T`.
-    """
-    if M.is_cuda and M.shape[1] < 32 and M.shape[2] < 32:
-        return _fast_gpu_svd(M)
-    else:
-        return torch.svd(M)
 
 # Batched eigenvalue decomposition.
 # Recent version of PyTorch deprecated the use of torch.symeig.
