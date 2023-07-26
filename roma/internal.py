@@ -14,8 +14,8 @@ svd = torch.svd
 # With PyTorch < 1.8,
 # we observed some significant speed-ups using torch_batch_svd (https://github.com/KinglittleQ/torch-batch-svd) instead of torch.svd on NVidia GPUs.
 # In more recent versions, torch.svd seems to have been fixed (https://github.com/pytorch/pytorch/pull/48436) and torch_batch_svd is no longer required.
-_torch_version = [int(s) for s in torch.__version__.split(".")]
-if  _torch_version[0] == 0 or (_torch_version[0] == 1 and _torch_version[1] < 8):
+_torch_version_major, _torch_version_minor = [int(s) for s in torch.__version__.split(".")[:2]]
+if  _torch_version_major == 0 or (_torch_version_major == 1 and _torch_version_minor < 8):
     try:
         import torch_batch_svd
         _IS_TORCH_BATCH_SVD_AVAILABLE = True
@@ -34,7 +34,7 @@ if  _torch_version[0] == 0 or (_torch_version[0] == 1 and _torch_version[1] < 8)
                 return torch.svd(M)
     except ModuleNotFoundError:
         pass
-del _torch_version
+del _torch_version_major, _torch_version_minor
 
 def flatten_batch_dims(tensor, end_dim):
     """
