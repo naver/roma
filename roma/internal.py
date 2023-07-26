@@ -8,12 +8,30 @@ Set of functions for internal module use.
 
 import torch
 
+# SVD decomposition
 # Default behavior: vanilla svd
 _IS_TORCH_BATCH_SVD_AVAILABLE = False
-svd = torch.svd
+try:
+    # Should raise an AttributeError exception if undefined.
+    torch.linalg.svd
+    def svd(M):
+        """
+        Singular Value Decomposition wrapper.
+        
+        Args:
+            M (BxMxN tensor): batch of real matrices.
+        Returns:
+            (U,D,V) decomposition, such as :math:`M = U @ diag(D) @ V^T`.
+        """
+        U, D, Vt = torch.linalg.svd(M)
+        return (U, D, Vt.transpose(-2,-1))
+except (NameError, AttributeError):
+    # deprecated in torch 2.0
+    svd = torch.svd
+
 # With PyTorch < 1.8,
 # we observed some significant speed-ups using torch_batch_svd (https://github.com/KinglittleQ/torch-batch-svd) instead of torch.svd on NVidia GPUs.
-# In more recent versions, torch.svd seems to have been fixed (https://github.com/pytorch/pytorch/pull/48436) and torch_batch_svd is no longer required.
+# In more recent versions, this is no longer required (https://github.com/pytorch/pytorch/pull/48436).
 _torch_version_major, _torch_version_minor = [int(s) for s in torch.__version__.split(".")[:2]]
 if  _torch_version_major == 0 or (_torch_version_major == 1 and _torch_version_minor < 8):
     try:
