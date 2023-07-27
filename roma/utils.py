@@ -408,8 +408,9 @@ def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
         y (...xNxD tensor): list of corresponding target vectors.
         weights (None or ...xN tensor): optional list of weights associated to each vector.
     Returns:
-        A tuple :math:`(R, t)` consisting of the rotation matrix :math:`R` (...xDxD tensor) and the scaling :math:`s` (... tensor) 
-        if :code:`compute_scaling==True`, the rotation matrix :math:`R` otherwise.
+        A tuple :math:`(R, s)` consisting of the rotation matrix :math:`R` (...xDxD tensor) and the scaling :math:`s` (... tensor) 
+        if :code:`compute_scaling=True`.
+        Returns the rotation matrix :math:`R` otherwise.
     """
     if weights is None:
         n = x.shape[-2]
@@ -445,7 +446,7 @@ def rigid_points_registration(x, y, weights=None, compute_scaling=False):
     Returns:
         a triplet :math:`(R, t, s)` consisting of a rotation matrix :math:`R` (...xDxD tensor), 
         a translation vector :math:`t` (...xD tensor),
-        and a scaling :math:`s` (... tensor) if :code:`compute_scaling==True`.
+        and a scaling :math:`s` (... tensor) if :code:`compute_scaling=True`.
         Returns :math:`(R, t)` otherwise.
 
     References:
