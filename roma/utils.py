@@ -194,15 +194,19 @@ def quat_product(p, q):
     """
     # Adapted from SciPy:
     # https://github.com/scipy/scipy/blob/adc4f4f7bab120ccfab9383aba272954a0a12fb0/scipy/spatial/transform/rotation.py#L153
-    batch_shape = p.shape[:-1]
-    assert q.shape[:-1] == batch_shape
-    p = p.reshape(-1, 4)
-    q = q.reshape(-1, 4)
-    product = torch.empty_like(q)
-    product[..., 3] = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
-    product[..., :3] = (p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] +
+    # batch_shape = p.shape[:-1]
+    # assert q.shape[:-1] == batch_shape, "Incompatible shapes"
+    # p = p.reshape(-1, 4)
+    # q = q.reshape(-1, 4)
+    # product = torch.empty_like(q)
+    # product[..., 3] = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
+    # product[..., :3] = (p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] +
+    #                   torch.cross(p[..., :3], q[..., :3], dim=-1))
+    
+    vector = (p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] +
                       torch.cross(p[..., :3], q[..., :3], dim=-1))
-    return product.reshape(*batch_shape, 4)
+    last = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
+    return torch.cat((vector, last[...,None]), dim=-1)
 
 def quat_composition(sequence, normalize = False):
     """

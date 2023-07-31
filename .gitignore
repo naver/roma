@@ -8,3 +8,4 @@ roma.egg-info/
 docs/.buildinfo
 htmlcov/
 .coverage
+build/
