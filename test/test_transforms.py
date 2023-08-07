@@ -128,3 +128,51 @@ class TestTransforms(unittest.TestCase):
                 self.assertTrue(torch.all(torch.isclose(identity2.linear, Ridentity)))
             self.assertTrue(torch.all(torch.isclose(identity1.translation, tidentity)))
             self.assertTrue(torch.all(torch.isclose(identity2.translation, tidentity)))
+
+    def test_affine_homogeneous_cast(self):
+        batch_shape = (10,)
+        for D in range(2,5):
+            for Type in (Affine, Isometry, Rigid):
+                transformation = Type(torch.randn(batch_shape + (D,D)), torch.randn(batch_shape + (D,))).normalize()
+                self.assertTrue(type(transformation) == Type)
+
+                homogeneous = transformation.to_homogeneous()
+                self.assertTrue(homogeneous.shape == batch_shape + (D+1, D+1))
+                self.assertTrue(torch.all(homogeneous[...,:D,:D] == transformation.linear))
+                self.assertTrue(torch.all(homogeneous[...,:D,D] == transformation.translation))
+                self.assertTrue(torch.all(homogeneous[...,D,:D] == 0.0))
+                self.assertTrue(torch.all(homogeneous[...,D,D] == 1))
+
+                transformation2 = Type.from_homogeneous(homogeneous)
+                self.assertTrue(type(transformation2) == Type)
+                self.assertTrue(torch.all(transformation.linear == transformation2.linear))
+                self.assertTrue(torch.all(transformation.translation == transformation2.translation))
+
+                # Re-use of an existing buffer
+                homogeneous_bis = transformation.to_homogeneous(homogeneous)
+                self.assertTrue(homogeneous_bis is homogeneous)
+
+    def test_unitquat_homogeneous_cast(self):
+        batch_shape = (10,)
+        D = 3
+        dtype = torch.float64
+        Type = RigidUnitQuat
+        transformation = Type(torch.randn(batch_shape + (4,), dtype=dtype), torch.randn(batch_shape + (D,), dtype=dtype)).normalize()
+        self.assertTrue(type(transformation) == Type)
+
+        homogeneous = transformation.to_homogeneous()
+        self.assertTrue(homogeneous.shape == batch_shape + (D+1, D+1))
+        self.assertTrue(roma.is_rotation_matrix(homogeneous[...,:D,:D]))
+        self.assertTrue(torch.all(roma.unitquat_geodesic_distance(roma.rotmat_to_unitquat(homogeneous[...,:D,:D]), transformation.linear) < 1e-6))
+        self.assertTrue(torch.all(homogeneous[...,:D,D] == transformation.translation))
+        self.assertTrue(torch.all(homogeneous[...,D,:D] == 0.0))
+        self.assertTrue(torch.all(homogeneous[...,D,D] == 1))
+
+        transformation2 = Type.from_homogeneous(homogeneous)
+        self.assertTrue(type(transformation2) == Type)
+        self.assertTrue(torch.all(roma.unitquat_geodesic_distance(transformation.linear, transformation2.linear) < 1e-6))
+        self.assertTrue(torch.all(transformation.translation == transformation2.translation))
+
+        # Re-use of an existing buffer
+        homogeneous_bis = transformation.to_homogeneous(homogeneous)
+        self.assertTrue(homogeneous_bis is homogeneous)             

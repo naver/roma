@@ -24,3 +24,6 @@ transformed_points = T[None].apply(points)
 vectors = torch.randn(10,20,3)
 # Adjusting the shape of T for proper broadcasting.
 transformed_vectors = T[None,None].linear_apply(vectors)
+
+# Casting the transformation into an homogeneous 4x4 matrix.
+M = T.to_homogeneous()

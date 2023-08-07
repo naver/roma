@@ -239,6 +239,51 @@ class _BaseAffine:
     
     def clone(self):
         return type(self)(self.linear.clone(), self.translation.clone())
+    
+
+    def to_homogeneous(self, output=None):
+        """
+        Args:
+            output (...x(D+1)x(D+1) tensor or None): tensor in which to store the result (optional).
+
+        Returns:
+            A tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1) (...x(D+1)x(D+1) tensor).
+        """
+        batch_shape, D = self.translation.shape[:-1], self.translation.shape[-1]
+        H = D + 1
+        output_shape = batch_shape + (H,H)
+        if output is None:
+            output = torch.empty(output_shape, device=self.translation.device, dtype=self.translation.dtype)
+        else:
+            assert output.shape == output_shape
+        output[...,:D,:D] = self.linear
+        output[...,:D,D] = self.translation
+        output[...,D,:D] = 0.0
+        output[...,D,D] = 1.0
+        return output
+
+    @classmethod
+    def from_homogeneous(class_object, matrix):
+        """
+        Instantiate a new transformation from an input homogeneous (D+1)x(D+1) matrix.
+
+        Args:
+            matrix (...x(D+1)x(D+1) tensor): tensor of transformations expressed in homogeneous coordinates, normalized with a last row equal to (0,...,0,1).
+
+        Returns:
+            The corresponding transformation.
+
+        Warning:
+            - The input matrix is not tested to ensure that it satisfies the required properties of the transformation.
+            - Components of the resulting transformation may consist in views of the input matrix. Be careful if you intend to modify it in-place.
+
+        """
+        H1, H2 = matrix.shape[-2:]
+        assert H1 == H2
+        D = H1 - 1
+        linear = matrix[...,:D, :D]
+        translation = matrix[...,:D, D]
+        return class_object(linear, translation)
                                        
 class Affine(_BaseAffine, Linear):
     """
@@ -248,7 +293,8 @@ class Affine(_BaseAffine, Linear):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        _BaseAffine.__init__(self, linear, translation)  
+        _BaseAffine.__init__(self, linear, translation)
+
 
 class Isometry(_BaseAffine, Orthonormal):
     """
@@ -260,6 +306,7 @@ class Isometry(_BaseAffine, Orthonormal):
     def __init__(self, linear, translation):
         _BaseAffine.__init__(self, linear, translation)
 
+
 class Rigid(_BaseAffine, Rotation):
     """
     A rigid transformation represented by an rotation and a translation part.
@@ -268,7 +315,7 @@ class Rigid(_BaseAffine, Rotation):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        _BaseAffine.__init__(self, linear, translation)
+        _BaseAffine.__init__(self, linear, translation)       
 
 class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
     """
@@ -279,9 +326,54 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
 
     Warning:
         Quaternions are assumed to be of unit norm, for all internal operations.
-        Use :func:`roma.transforms.RotationUnitQuat.normalize()` if needed.
+        Use the :code:`normalize()` method if needed.
     """
     def __init__(self, linear, translation):
         assert linear.shape[-1] == 4 and translation.shape[-1] == 3, "Expecting respectively a 4D quaternion vector and a 3D translation vector"
         assert len(linear.shape[:-1]) == len(translation.shape[:-1]), "Batch dimensions should at least be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
+
+    def to_homogeneous(self, output=None):
+        """
+        Args:
+            output (...x(D+1)x(D+1) tensor or None): tensor in which to store the result (optional).
+
+        Returns:
+            A tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1) (...x(D+1)x(D+1) tensor).
+        """
+        batch_shape = self.translation.shape[:-1]
+        output_shape = batch_shape + (4,4)
+        if output is None:
+            output = torch.zeros(output_shape, device=self.translation.device, dtype=self.translation.dtype)
+        else:
+            assert output_shape == output_shape
+        output[...,:3,:3] = roma.unitquat_to_rotmat(self.linear)
+        output[...,:3,3] = self.translation
+        # Set the homogeneous line
+        # Note: this is redundant with zeros initialization, but .
+        output[...,3,:3] = 0.0
+        output[...,3,3] = 1.0
+        return output
+
+    @staticmethod
+    def from_homogeneous(matrix):
+        """
+        Instantiate a new transformation from an input homogeneous (D+1)x(D+1) matrix.
+
+        Args:
+            matrix (...x(D+1)x(D+1) tensor): tensor of transformations expressed in homogeneous coordinates, normalized with a last row equal to (0,...,0,1).
+
+        Returns:
+            The corresponding transformation.
+
+        Warning:
+            - The input matrix is not tested to ensure that it satisfies the required properties of the transformation.
+            - Components of the resulting transformation may consist in views of the input matrix. Be careful if you intend to modify it in-place.
+            
+        """
+        H1, H2 = matrix.shape[-2:]
+        assert H1 == H2
+        D = H1 - 1
+        linear = roma.rotmat_to_unitquat(matrix[...,:D, :D])
+        translation = matrix[...,:D, D]
+        return RigidUnitQuat(linear, translation)
