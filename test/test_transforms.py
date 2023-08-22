@@ -22,10 +22,11 @@ class TestTransforms(unittest.TestCase):
             self.assertTrue(torch.all(torch.isclose(Rx, Tx)))
 
     def test_apply(self):
+        dtype = torch.float64
         batch_shape = (10,)
-        x = torch.randn(batch_shape + (3,))
-        R = roma.random_rotmat(batch_shape)
-        t = torch.randn(batch_shape + (3,)) 
+        x = torch.randn(batch_shape + (3,), dtype=dtype)
+        R = roma.random_rotmat(batch_shape, dtype=dtype)
+        t = torch.randn(batch_shape + (3,), dtype=dtype) 
 
         for transform in Affine, Isometry, Rigid, RigidUnitQuat:
             if transform == RigidUnitQuat:
@@ -43,7 +44,6 @@ class TestTransforms(unittest.TestCase):
         x = torch.randn(batch_shape + (3,), dtype=dtype)
         R1 = roma.random_rotmat(batch_shape, dtype=dtype)
         t1 = torch.randn(batch_shape + (3,), dtype=dtype)
-
         R2 = roma.random_rotmat(batch_shape, dtype=dtype)
         t2 = torch.randn(batch_shape + (3,), dtype=dtype)
 
@@ -175,4 +175,66 @@ class TestTransforms(unittest.TestCase):
 
         # Re-use of an existing buffer
         homogeneous_bis = transformation.to_homogeneous(homogeneous)
-        self.assertTrue(homogeneous_bis is homogeneous)             
+        self.assertTrue(homogeneous_bis is homogeneous)
+
+    def test_orthonormalization(self):
+        batch_shape = (10,4)
+        D = 5
+        dtype = torch.float64
+
+        for _ in range(10):
+            raw = torch.randn(batch_shape + (D,D), dtype=dtype)
+
+            ortho1 = Orthonormal(raw).normalize()
+            ortho2 = ortho1.normalize()
+
+            self.assertTrue(roma.is_orthonormal_matrix(ortho1.linear))
+            self.assertTrue(roma.is_orthonormal_matrix(ortho2.linear))
+            self.assertTrue(torch.all(torch.isclose(ortho1.linear, ortho2.linear)))
+
+            translation = torch.randn(batch_shape + (D,), dtype=dtype)
+            iso = Isometry(raw, translation).normalize()
+            self.assertTrue(torch.all(torch.isclose(iso.linear, ortho1.linear)))
+            self.assertTrue(torch.all(torch.isclose(iso.translation, translation)))
+
+    def test_rotation(self):
+        batch_shape = (10,4)
+        D = 5
+        dtype = torch.float64
+
+        for _ in range(10):
+            raw = torch.randn(batch_shape + (D,D), dtype=dtype)
+            translation = torch.randn(batch_shape + (D,), dtype=dtype)
+
+            rot1 = Rotation(raw).normalize()
+            rot2 = rot1.normalize()
+
+            self.assertTrue(roma.is_rotation_matrix(rot1.linear))
+            self.assertTrue(roma.is_rotation_matrix(rot2.linear))
+            self.assertTrue(torch.all(torch.isclose(rot1.linear, rot2.linear)))
+
+            rigid = Rigid(raw, translation).normalize()
+            self.assertTrue(torch.all(torch.isclose(rigid.linear, rot1.linear)))
+            self.assertTrue(torch.all(torch.isclose(rigid.translation, translation)))
+
+
+    def test_rotation_unit_quat(self):
+        batch_shape = (10,4)
+        D = 3
+        dtype = torch.float64
+
+        for _ in range(10):
+            raw = torch.randn(batch_shape + (D,D), dtype=dtype)
+            translation = torch.randn(batch_shape + (D,), dtype=dtype)
+
+            rot1 = Rotation(raw).normalize()
+            quat = RotationUnitQuat(roma.rotmat_to_unitquat(rot1.linear))
+            quat1 = quat.normalize()
+            self.assertTrue(torch.all(torch.isclose(roma.unitquat_to_rotmat(quat1.linear), rot1.linear)))
+            self.assertTrue(torch.all(torch.isclose(quat1.linear, quat.linear)))
+
+            rigidq = RigidUnitQuat(roma.rotmat_to_unitquat(rot1.linear), translation)
+            rigidq1 = rigidq.normalize()
+            self.assertTrue(torch.all(torch.isclose(roma.unitquat_to_rotmat(rigidq1.linear), rot1.linear)))
+            self.assertTrue(torch.all(torch.isclose(rigidq1.translation, translation)))
+            self.assertTrue(torch.all(torch.isclose(rigidq.linear, rigidq1.linear)))

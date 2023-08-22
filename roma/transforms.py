@@ -100,7 +100,8 @@ class Linear:
     def normalize(self):
         """
         Returns:
-            Current transformation normalized to ensure the properties of its class (e.g. ensuring that :class:`Rotation` is an actual rotation).
+            Copy of the transformation, normalized to ensure the class properties
+            (for example to ensure that a :class:`Rotation` object is an actual rotation).
         """
         return type(self)(self.linear_normalize())
     
@@ -112,7 +113,7 @@ class Linear:
     
     def __getitem__(self, args):
         """
-        Convenience slicing function.
+        Slicing operator, for convenience.
         """
         return type(self)(self.linear[args])
     
@@ -121,7 +122,8 @@ class Linear:
     
     def clone(self):
         """
-        Return a copy of the transformation, with cloned data.
+        Returns:
+            A copy of the transformation (useful to avoid aliasing issues).
         """
         return type(self)(self.linear.clone())
 
@@ -141,7 +143,7 @@ class Orthonormal(Linear):
     def linear_normalize(self):
         """
         Returns:
-            Linear transformation normalized to ensure that it is an orthonormal matrix (...xDxD tensor).
+            Linear transformation normalized to an orthonormal matrix (...xDxD tensor).
         """        
         return roma.mappings.procrustes(self.linear)
     
@@ -158,7 +160,7 @@ class Rotation(Orthonormal):
     def linear_normalize(self):
         """
         Returns:
-            Linear transformation normalized to ensure that it is a rotation matrix (...xDxD tensor).
+            Linear transformation normalized to a rotation matrix (...xDxD tensor).
         """
         return roma.mappings.special_procrustes(self.linear)
     
@@ -166,7 +168,7 @@ class RotationUnitQuat(Linear):
     """
     A 3D rotation represented by a unit quaternion.
     
-    :var linear: (...x4 tensor): batch of unit quaternions defining the rotation.
+    :var linear: (...x4 tensor, XYZW convention): batch of unit quaternions defining the rotation.
 
     Warning:
         Quaternions are assumed to be of unit norm, for all internal operations.
@@ -220,7 +222,7 @@ class _BaseAffine:
     
     def __getitem__(self, args):
         """
-        Convenience slicing operation
+        Slicing operator, for convenience.
         """
         return type(self)(self.linear[args], self.translation[args])    
     
@@ -238,13 +240,17 @@ class _BaseAffine:
         return self.linear, self.translation
     
     def clone(self):
+        """
+        Returns:
+            A copy of the transformation (useful to avoid aliasing issues).
+        """
         return type(self)(self.linear.clone(), self.translation.clone())
     
 
     def to_homogeneous(self, output=None):
         """
         Args:
-            output (...x(D+1)x(D+1) tensor or None): tensor in which to store the result (optional).
+            output (...x(D+1)x(D+1) tensor or None): optional tensor in which to store the result.
 
         Returns:
             A tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1) (...x(D+1)x(D+1) tensor).
@@ -274,8 +280,8 @@ class _BaseAffine:
             The corresponding transformation.
 
         Warning:
-            - The input matrix is not tested to ensure that it satisfies the required properties of the transformation.
-            - Components of the resulting transformation may consist in views of the input matrix. Be careful if you intend to modify it in-place.
+            - The input matrix is assumed to be normalized and to satisfy the properties of the transformation. No checks are performed.
+            - The resulting transformation may consist in views of the input matrix. Use the :code:`clone()` method if you intend to modify data in-place. 
 
         """
         H1, H2 = matrix.shape[-2:]
@@ -293,10 +299,12 @@ class Affine(_BaseAffine, Linear):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
+        assert translation.shape[-1] == linear.shape[-1], "Incompatible linear and translation dimensions."
+        assert len(linear.shape[:-2]) == len(translation.shape[:-1]), "Batch dimensions should be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
 
 
-class Isometry(_BaseAffine, Orthonormal):
+class Isometry(Affine, Orthonormal):
     """
     An isometric transformation represented by an orthonormal and a translation part.
 
@@ -304,10 +312,10 @@ class Isometry(_BaseAffine, Orthonormal):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        _BaseAffine.__init__(self, linear, translation)
+        Affine.__init__(self, linear, translation)
 
 
-class Rigid(_BaseAffine, Rotation):
+class Rigid(Affine, Rotation):
     """
     A rigid transformation represented by an rotation and a translation part.
 
@@ -315,22 +323,22 @@ class Rigid(_BaseAffine, Rotation):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        _BaseAffine.__init__(self, linear, translation)       
+        Affine.__init__(self, linear, translation)       
 
 class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
     """
     A rigid transformation represented by a unit quaternion and a translation part.
 
     :var linear: (...x4 tensor): batch of unit quaternions defining the rotation.
-    :var translation: (...xD tensor): batch of matrices specifying the translation part.    
+    :var translation: (...x3 tensor): batch of matrices specifying the translation part.    
 
     Warning:
         Quaternions are assumed to be of unit norm, for all internal operations.
         Use the :code:`normalize()` method if needed.
     """
     def __init__(self, linear, translation):
-        assert linear.shape[-1] == 4 and translation.shape[-1] == 3, "Expecting respectively a 4D quaternion vector and a 3D translation vector"
-        assert len(linear.shape[:-1]) == len(translation.shape[:-1]), "Batch dimensions should at least be broadcastable."
+        assert linear.shape[-1] == 4 and translation.shape[-1] == 3, "Expecting respectively a ...x4 quaternion vector and a ...x3 translation vector"
+        assert len(linear.shape[:-1]) == len(translation.shape[:-1]), "Batch dimensions should be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
 
     def to_homogeneous(self, output=None):

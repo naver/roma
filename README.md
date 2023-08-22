@@ -45,6 +45,14 @@ q_identity = roma.quat_product(roma.quat_conjugation(q), q)
 # Spherical interpolation between rotation vectors (shortest path)
 rotvec0, rotvec1 = torch.randn(batch_shape + (3,)), torch.randn(batch_shape + (3,))
 rotvec_interpolated = roma.rotvec_slerp(rotvec0, rotvec1, steps)
+
+# Rigid transformation T composed of a rotation part R and a translation part t
+t = torch.randn(batch_shape + (3,))
+T = roma.Rigid(R, t)
+# Composing and inverting transformations
+identity = T @ T.inverse()
+# Casting the result to a batch of 4x4 homogeneous matrices
+M = identity.to_homogeneous()
 ```
 
 
