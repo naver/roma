@@ -5,9 +5,6 @@
 """
 Spatial transformations parameterized by rotation matrices, unit quaternions and more.
 
-Note:
-    This module is still in *alpha* mode, and not yet available through PIP.
-
 Example of use
 ~~~~~~~~~~~~~~
 
