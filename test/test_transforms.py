@@ -2,6 +2,7 @@ import torch
 import roma
 from roma.transforms import *
 import unittest
+import itertools
 
 class TestTransforms(unittest.TestCase):
     def test_linear_apply(self):
@@ -238,3 +239,31 @@ class TestTransforms(unittest.TestCase):
             self.assertTrue(torch.all(torch.isclose(roma.unitquat_to_rotmat(rigidq1.linear), rot1.linear)))
             self.assertTrue(torch.all(torch.isclose(rigidq1.translation, translation)))
             self.assertTrue(torch.all(torch.isclose(rigidq.linear, rigidq1.linear)))
+
+    def test_affine_different_dims(self):
+        """
+        Tests with various input and output spatial dimensions.
+        """
+        batch_shape = (10,4)
+        dtype = torch.float64
+
+        for C in range(2, 5):
+            for D in range(2, 5):
+                linear = torch.randn(batch_shape + (C, D), dtype=dtype)
+                translation = torch.randn(batch_shape + (C,), dtype=dtype)
+                roma.Linear(linear)
+                x = torch.randn(batch_shape + (D,), dtype=dtype)
+                T = roma.Affine(linear, translation)
+                Tx = T.apply(x)
+                homogeneous = T.to_homogeneous()
+                homogeneous2 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous()
+                homogeneous3 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous(torch.zeros_like(homogeneous))
+                self.assertTrue(homogeneous.shape == batch_shape + (C+1, D+1))
+                self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous2)))
+                self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous3)))
+                if C != D:
+                    self.assertRaises(AssertionError, lambda : roma.Orthonormal(linear))
+                    self.assertRaises(AssertionError, lambda : roma.Rotation(linear))
+                    self.assertRaises(AssertionError, lambda : roma.Isometry(linear, translation))
+                    self.assertRaises(AssertionError, lambda : roma.Rigid(linear, translation))
+                    

@@ -5,23 +5,54 @@
 """
 Spatial transformations parameterized by rotation matrices, unit quaternions and more.
 
-Warning:
-    For efficiency reasons, transformation classes do not copy data. Be careful if you intend to use some in-place data modifications.
+Note:
+    This module is still in *alpha* mode, and not yet available through PIP.
 
-Example of use:
+Example of use
+~~~~~~~~~~~~~~
 
 .. literalinclude :: ../../examples/snippets/transforms.py
     :language: python
+
+.. _apply-transformation:
+
+Applying a transformation
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When applying a transformation to a set of points of coordinates :code:`v`,
+The batch shape of :code:`v` should be broadcastable with the batch shape of the transformation.
+
+For example, one can sample a unique random rigid 3D transformation and use it to transform 100 random 3D points as follows:
+
+.. code-block:: python
+
+    roma.Rigid(roma.random_rotmat(), torch.randn(3))[None].apply(torch.randn(100,3))
+
+To apply a different transformation to each point, one could use instead:
+
+.. code-block:: python
+
+    roma.Rigid(roma.random_rotmat(100), torch.randn(100,3)).apply(torch.randn(100,3))
+
+.. _aliasing_issues:    
+
+Aliasing issues
+~~~~~~~~~~~~~~~
+
+.. warning::
+
+    For efficiency reasons, transformation objects do not copy input data. Be careful if you intend to do some in-place data modifications, and use the :code:`clone()` method when required.
+
 """
 import torch
 import roma
  
 class Linear:
     """
-    A linear transformation parameterized by a matrix :math:`M \in \mathcal{M}_{D,D}(\mathbb{R})`,
-    transforming a point :math:`x \in \mathbb{R}^D` into :math:`M x`.
+    A linear transformation parameterized by a matrix :math:`M \in \mathcal{M}_{D,C}(\mathbb{R})`,
+    transforming a point :math:`x \in \mathbb{R}^C` into :math:`M x`.
 
-    :var linear: (...xDxD tensor): batch of matrices specifying the transformations considered.
+    :var linear: (...xDxC tensor): batch of matrices specifying the transformations considered.
     """
     def __init__(self, linear):
         self.linear = linear
@@ -40,7 +71,7 @@ class Linear:
     def linear_inverse(self):
         """
         Returns:
-            The inverse of the linear transformation.
+            The inverse of the linear transformation, when applicable.
         """
         return torch.inverse(self.linear)
     
@@ -76,24 +107,19 @@ class Linear:
     def inverse(self):
         """
         Returns:
-            The inverse transformation.
+            The inverse transformation, when applicable.
         """
         return type(self)(self.linear_inverse())
     
     def apply(self, v):
         """
-        Transforms a tensor of points coordinates.
+        Transforms a tensor of points coordinates. See :ref:`apply-transformation`.
 
         Args:
             v (...xD tensor): tensor of point coordinates to transform.
 
         Returns:
             The transformed point coordinates.
-
-        Note:
-            The batch shape of :code:`v` should be broadcastable with the batch shape of the transformation.
-            For example, one can transform 100 points by the same 3x3 linear transformation using:
-            :code:`roma.Linear(torch.randn(3,3))[None].apply(torch.randn(100,3))`.
         """
         return self.linear_apply(v)
     
@@ -135,6 +161,7 @@ class Orthonormal(Linear):
     :var linear: (...xDxD tensor): batch of matrices :math:`M` specifying the transformations considered.
     """
     def __init__(self, linear):
+        assert linear.shape[-1] == linear.shape[-2], "Expecting same dimensions for input and output."
         super().__init__(linear)
 
     def linear_inverse(self):
@@ -170,9 +197,9 @@ class RotationUnitQuat(Linear):
     
     :var linear: (...x4 tensor, XYZW convention): batch of unit quaternions defining the rotation.
 
-    Warning:
+    Note:
         Quaternions are assumed to be of unit norm, for all internal operations.
-        Use :func:`roma.transforms.RotationUnitQuat.normalize()` if needed.
+        Use :code:`normalize()` if needed.
     """
     def __init__(self, linear):
         self.linear = linear
@@ -250,56 +277,51 @@ class _BaseAffine:
     def to_homogeneous(self, output=None):
         """
         Args:
-            output (...x(D+1)x(D+1) tensor or None): optional tensor in which to store the result.
+            output (...x(D+1)x(C+1) tensor or None): optional tensor in which to store the result.
 
         Returns:
-            A tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1) (...x(D+1)x(D+1) tensor).
+            A ...x(D+1)x(C+1) tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
-        batch_shape, D = self.translation.shape[:-1], self.translation.shape[-1]
-        H = D + 1
-        output_shape = batch_shape + (H,H)
+        batch_shape, D, C = self.linear.shape[:-2], self.linear.shape[-2], self.linear.shape[-1]
+        output_shape = batch_shape + (D+1,C+1)
         if output is None:
             output = torch.empty(output_shape, device=self.translation.device, dtype=self.translation.dtype)
         else:
             assert output.shape == output_shape
-        output[...,:D,:D] = self.linear
-        output[...,:D,D] = self.translation
-        output[...,D,:D] = 0.0
-        output[...,D,D] = 1.0
+        output[...,:D,:C] = self.linear
+        output[...,:D,C] = self.translation
+        output[...,D,:C] = 0.0
+        output[...,D,C] = 1.0
         return output
 
     @classmethod
     def from_homogeneous(class_object, matrix):
         """
-        Instantiate a new transformation from an input homogeneous (D+1)x(D+1) matrix.
+        Instantiate a new transformation from an input homogeneous (D+1)x(C+1) matrix.
+        The input matrix is assumed to be normalized and to satisfy the properties of the transformation. No checks are performed.
 
         Args:
-            matrix (...x(D+1)x(D+1) tensor): tensor of transformations expressed in homogeneous coordinates, normalized with a last row equal to (0,...,0,1).
+            matrix (...x(D+1)x(C+1) tensor): tensor of transformations expressed in homogeneous coordinates, normalized with a last row equal to (0,...,0,1).
 
         Returns:
             The corresponding transformation.
-
-        Warning:
-            - The input matrix is assumed to be normalized and to satisfy the properties of the transformation. No checks are performed.
-            - The resulting transformation may consist in views of the input matrix. Use the :code:`clone()` method if you intend to modify data in-place. 
-
         """
         H1, H2 = matrix.shape[-2:]
-        assert H1 == H2
         D = H1 - 1
-        linear = matrix[...,:D, :D]
-        translation = matrix[...,:D, D]
+        C = H2 - 1
+        linear = matrix[...,:D, :C]
+        translation = matrix[...,:D, C]
         return class_object(linear, translation)
                                        
 class Affine(_BaseAffine, Linear):
     """
     An affine transformation represented by a linear and a translation part.
 
-    :var linear: (...xDxD tensor): batch of matrices specifying the linear part.
+    :var linear: (...xCxD tensor): batch of matrices specifying the linear part.
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        assert translation.shape[-1] == linear.shape[-1], "Incompatible linear and translation dimensions."
+        assert translation.shape[-1] == linear.shape[-2], "Incompatible linear and translation dimensions."
         assert len(linear.shape[:-2]) == len(translation.shape[:-1]), "Batch dimensions should be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
 
@@ -312,10 +334,11 @@ class Isometry(Affine, Orthonormal):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
+        assert linear.shape[-1] == linear.shape[-2], "Expecting same dimensions for input and output."
         Affine.__init__(self, linear, translation)
 
 
-class Rigid(Affine, Rotation):
+class Rigid(Isometry, Rotation):
     """
     A rigid transformation represented by an rotation and a translation part.
 
@@ -323,7 +346,7 @@ class Rigid(Affine, Rotation):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        Affine.__init__(self, linear, translation)       
+        Isometry.__init__(self, linear, translation)       
 
 class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
     """
@@ -332,7 +355,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
     :var linear: (...x4 tensor): batch of unit quaternions defining the rotation.
     :var translation: (...x3 tensor): batch of matrices specifying the translation part.    
 
-    Warning:
+    Note:
         Quaternions are assumed to be of unit norm, for all internal operations.
         Use the :code:`normalize()` method if needed.
     """
@@ -344,10 +367,10 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
     def to_homogeneous(self, output=None):
         """
         Args:
-            output (...x(D+1)x(D+1) tensor or None): tensor in which to store the result (optional).
+            output (...x4x4 tensor or None): tensor in which to store the result (optional).
 
         Returns:
-            A tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1) (...x(D+1)x(D+1) tensor).
+            A ...x4x4 tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
         batch_shape = self.translation.shape[:-1]
         output_shape = batch_shape + (4,4)
@@ -374,7 +397,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         Returns:
             The corresponding transformation.
 
-        Warning:
+        Note:
             - The input matrix is not tested to ensure that it satisfies the required properties of the transformation.
             - Components of the resulting transformation may consist in views of the input matrix. Be careful if you intend to modify it in-place.
             

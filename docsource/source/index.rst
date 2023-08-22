@@ -200,13 +200,8 @@ Utils
 .. automodule:: roma.utils
    :members:
 
-Spatial transforms
--------------------
-
-Warning:
-    This module is still in *alpha* mode.
-    It is not available through PIP yet, and is subject to change.
-
+Spatial transformations
+-------------------------
 .. automodule:: roma.transforms
    :members:
    :inherited-members:
