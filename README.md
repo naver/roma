@@ -3,7 +3,7 @@
 [![PyPI version](https://badge.fury.io/py/roma.svg)](https://badge.fury.io/py/roma)
 [![ArXiv](https://img.shields.io/badge/arXiv-2103.16317-33cb56)](https://arxiv.org/abs/2103.16317)
 [![Unit tests](https://github.com/naver/roma/actions/workflows/main.yml/badge.svg)](https://github.com/naver/roma/actions/workflows/main.yml)
-[![Downloads](https://pepy.tech/badge/roma)](https://pepy.tech/project/roma)
+[![Downloads](https://static.pepy.tech/badge/roma)](https://pepy.tech/project/roma)
 
 *RoMa* (which stands for Rotation Manipulation) provides differentiable mappings between 3D rotation representations, mappings from Euclidean to rotation space, and various utilities related to rotations.
 
