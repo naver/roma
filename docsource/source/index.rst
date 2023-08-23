@@ -200,6 +200,8 @@ Utils
 .. automodule:: roma.utils
    :members:
 
+.. _spatial-transformations:
+
 Spatial transformations
 -------------------------
 .. automodule:: roma.transforms
@@ -229,6 +231,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.4.0:
+    - Added the :ref:`spatial-transformations` module.
 Version 1.3.4:
     - Use default `torch.svd` with pytorch versions greater than 1.8 (efficiency issue compared to `torch_batch_svd` solved in this PR: https://github.com/pytorch/pytorch/pull/48436).
 Version 1.3.3:
