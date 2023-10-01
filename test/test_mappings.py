@@ -185,6 +185,14 @@ class TestMappings(unittest.TestCase):
         self.assertTrue(torch.all(torch.isfinite(loss)))
         self.assertTrue(torch.all(torch.isfinite(rotvec.grad)))
 
+    def test_quat_conventions(self):
+        for batch_shape in [(), (10,), (23,5)]:
+            quat_xyzw = torch.randn(batch_shape + (4,))
+            quat_wxyz = roma.mappings.quat_xyzw_to_wxyz(quat_xyzw)
+            self.assertTrue(quat_xyzw.shape == quat_wxyz.shape)
+            quat_xyzw_bis = roma.mappings.quat_wxyz_to_xyzw(quat_wxyz)
+            self.assertTrue(torch.all(quat_xyzw == quat_xyzw_bis))
+
 
 if __name__ == "__main__":
     unittest.main()

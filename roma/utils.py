@@ -154,6 +154,18 @@ def unitquat_geodesic_distance(q1, q2):
     """
     return 4.0 * torch.asin(0.5 * torch.min(roma.internal.norm(q2 - q1, dim=-1), roma.internal.norm(q2 + q1, dim=-1)))
 
+def rotvec_geodesic_distance(vec1, vec2):
+    """
+    Returns the angular distance between rotations represented by rotation vectors.
+    (use a conversion to unit quaternions internally).
+
+    Args:
+        vec1, vec2 (...x3 tensors): batch of rotation vectors.
+    Returns:
+        batch of angles in radians (... tensor).
+    """
+    return unitquat_geodesic_distance(roma.mappings.rotvec_to_unitquat(vec1), roma.mappings.rotvec_to_unitquat(vec2))
+
 def quat_conjugation(quat):
     """
     Returns the conjugation of input batch of quaternions.

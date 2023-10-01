@@ -20,7 +20,7 @@ class TestUtils(unittest.TestCase):
             xbis = roma.internal.unflatten_batch_dims(xflat, batch_shape)
             self.assertTrue(torch.all(xbis == x))
 
-    def test_geodesic_distance(self):
+    def test_rotmat_geodesic_distance(self):
         batch_size = 100
         for dtype in (torch.float32, torch.float64):
             axis = torch.nn.functional.normalize(torch.randn((batch_size,3), dtype=dtype), dim=-1)
@@ -48,7 +48,7 @@ class TestUtils(unittest.TestCase):
             geo_dist_naive = roma.rotmat_geodesic_distance_naive(M @ R, M @ I[None,:,:])
             self.assertTrue(is_close(torch.abs(alpha), geo_dist_naive))
 
-    def test_unitquat_geodesic_distance(self):
+    def test_other_geodesic_distance(self):
         batch_size = 100
         for dtype in (torch.float32, torch.float64):
             q1 = roma.random_unitquat(batch_size, dtype=dtype)
@@ -59,6 +59,10 @@ class TestUtils(unittest.TestCase):
             R2 = roma.unitquat_to_rotmat(q2)
             alpha_R = roma.rotmat_geodesic_distance(R1, R2)
             self.assertTrue(is_close(alpha_q, alpha_R))
+            rotvec1 = roma.unitquat_to_rotvec(q1)
+            rotvec2 = roma.unitquat_to_rotvec(q2)
+            alpha_rotvec = roma.rotvec_geodesic_distance(rotvec1, rotvec2)
+            self.assertTrue(is_close(alpha_rotvec, alpha_q))
 
     def test_random_unitquat(self):
         q = roma.random_unitquat((3,5))

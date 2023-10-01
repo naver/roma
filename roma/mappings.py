@@ -429,3 +429,27 @@ def rotmat_to_rotvec(R):
     """
     q = rotmat_to_unitquat(R)
     return unitquat_to_rotvec(q)
+
+def quat_xyzw_to_wxyz(xyzw):
+    """
+    Convert quaternion from XYZW to WXYZ convention.
+
+    Args:
+        xyzw (...x4 tensor, XYZW convention): batch of quaternions.
+    Returns:
+        batch of quaternions (...x4 tensor, WXYZ convention).
+    """
+    assert xyzw.shape[-1] == 4
+    return torch.cat((xyzw[...,-1,None], xyzw[...,:-1]), dim=-1)
+
+def quat_wxyz_to_xyzw(wxyz):
+    """
+    Convert quaternion from WXYZ to XYZW convention.
+
+    Args:
+        wxyz (...x4 tensor, WXYZ convention): batch of quaternions.
+    Returns:
+        batch of quaternions (...x4 tensor, XYZW convention).
+    """
+    assert wxyz.shape[-1] == 4
+    return torch.cat((wxyz[...,1:], wxyz[...,0,None]), dim=-1)

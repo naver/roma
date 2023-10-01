@@ -231,6 +231,9 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.4.1:
+    - Added XYZW / WXYZ quaternion conversion routines: :func:`~roma.mappings.quat_xyzw_to_wxyz()` and :func:`~roma.mappings.quat_wxyz_to_xyzw()`.
+    - Added :func:`~roma.utils.rotvec_geodesic_distance()`.
 Version 1.4.0:
     - Added the :ref:`spatial-transformations` module.
 Version 1.3.4:
