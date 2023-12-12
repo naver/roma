@@ -266,4 +266,19 @@ class TestTransforms(unittest.TestCase):
                     self.assertRaises(AssertionError, lambda : roma.Rotation(linear))
                     self.assertRaises(AssertionError, lambda : roma.Isometry(linear, translation))
                     self.assertRaises(AssertionError, lambda : roma.Rigid(linear, translation))
+
+    def test_rigid_conversions(self):
+        batch_shape = (2,3,6)
+        dtype = torch.float64
+        rigid = roma.Rigid(roma.random_rotmat(batch_shape, dtype=dtype), torch.zeros(batch_shape + (3,), dtype=dtype))
+        rigidunitquat = rigid.to_rigidunitquat()
+        rigid2 = rigidunitquat.to_rigid()
+
+        self.assertTrue(torch.all(torch.isclose(rigid.linear, rigid2.linear)))
+        self.assertTrue(torch.all(torch.isclose(rigid.translation, rigid2.translation)))
+
+        x = torch.randn(batch_shape + (3,), dtype=dtype)
+        x1 = rigid.apply(x)
+        x2 = rigidunitquat.apply(x)
+        self.assertTrue(torch.all(torch.isclose(x1, x2)))
                     

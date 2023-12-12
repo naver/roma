@@ -63,6 +63,7 @@ class Linear:
         Returns:
             a tensor representing the composed transformation.
         """
+        assert len(self.linear.shape) == len(other.linear.shape), "Expecting the same number of batch dimensions for the two transformations."
         return torch.einsum("...ik, ...kj -> ...ij", self.linear, other.linear)
     
     def linear_inverse(self):
@@ -84,6 +85,7 @@ class Linear:
 
         See note in :func:`~roma.transforms.Linear.apply()` regarding broadcasting.
         """
+        assert len(self.linear.shape) == len(v.shape) + 1, "Expecting the same number of batch dimensions for the transformation and the vector."
         return torch.einsum("...ik, ...k -> ...i", self.linear, v)
 
     def linear_normalize(self):
@@ -343,7 +345,16 @@ class Rigid(Isometry, Rotation):
     :var translation: (...xD tensor): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        Isometry.__init__(self, linear, translation)       
+        Isometry.__init__(self, linear, translation)
+
+    def to_rigidunitquat(self):
+        """
+        Returns the corresponding RigidUnitQuat transformation.
+
+        Note:
+            Original and resulting transformations share the same translation tensor. Be careful in case of in-place modifications.
+        """
+        return RigidUnitQuat(roma.rotmat_to_unitquat(self.linear), self.translation)
 
 class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
     """
@@ -405,3 +416,12 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         linear = roma.rotmat_to_unitquat(matrix[...,:D, :D])
         translation = matrix[...,:D, D]
         return RigidUnitQuat(linear, translation)
+    
+    def to_rigid(self):
+        """
+        Returns the corresponding Rigid transformation.
+
+        Note:
+            Original and resulting transformations share the same translation tensor. Be careful in case of in-place modifications.
+        """
+        return Rigid(roma.unitquat_to_rotmat(self.linear), self.translation)
