@@ -112,6 +112,8 @@ class TestUtils(unittest.TestCase):
             q_id = roma.rotvec_to_unitquat(torch.zeros(1,3))
             self.assertTrue(is_close(q_id, roma.quat_product(q, iq)))
             self.assertTrue(is_close(q_id, roma.quat_product(iq, q)))
+            nq = roma.quat_normalize(q)
+            self.assertTrue(is_close(roma.internal.norm(nq, dim=-1), torch.ones(batch_size, dtype=dtype)))
 
     def test_quat_action(self):
         batch_size=100

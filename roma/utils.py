@@ -195,6 +195,17 @@ def quat_inverse(quat):
     """
     return quat_conjugation(quat) / torch.sum(quat**2, dim=-1, keepdim=True)
 
+def quat_normalize(quat):
+    """
+    Returns a normalized, unit norm, copy of a batch of quaternions.
+
+    Args:
+        quat (...x4 tensor, XYZW convention): batch of quaternions.
+    Returns:
+        batch of quaternions (...x4 tensor, XYZW convention).        
+    """
+    return quat / roma.internal.norm(quat, dim=-1, keepdim=True)
+
 def quat_product(p, q):
     """
     Returns the product of two quaternions.
@@ -235,7 +246,7 @@ def quat_composition(sequence, normalize = False):
     for q in sequence[1:]:
         res = quat_product(res, q)
     if normalize:
-        q = q / torch.norm(q, dim=-1, keepdim=True)
+        res = quat_normalize(res)
     return res
 
 def quat_action(q, v, is_normalized=False):
@@ -380,7 +391,7 @@ def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
     # Interpolation
     q = alpha * q0.reshape((1,) * steps.dim() + q0.shape) + beta * q1.reshape((1,) * steps.dim() + q1.shape)
     # Normalization of the output
-    q /= torch.norm(q, dim=-1, keepdim=True)
+    q = quat_normalize(q)
     return q.reshape(steps.shape + batch_shape + (4,))
     
 def rotvec_slerp(rotvec0, rotvec1, steps):
