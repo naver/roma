@@ -64,6 +64,19 @@ class TestUtils(unittest.TestCase):
             alpha_rotvec = roma.rotvec_geodesic_distance(rotvec1, rotvec2)
             self.assertTrue(is_close(alpha_rotvec, alpha_q))
 
+    def test_identity_quat(self):
+        q = roma.identity_quat()
+        self.assertTrue(q.shape == (4,))
+        self.assertTrue(is_close(q, roma.quat_inverse(q)))
+
+        q = roma.identity_quat(5)
+        self.assertTrue(q.shape == (5,4))
+        self.assertTrue(is_close(q, roma.quat_inverse(q)))
+
+        q = roma.identity_quat((3,2))
+        self.assertTrue(q.shape == (3,2,4))
+        self.assertTrue(is_close(q, roma.quat_inverse(q)))
+
     def test_random_unitquat(self):
         q = roma.random_unitquat((3,5))
         self.assertTrue(q.shape == (3,5,4))

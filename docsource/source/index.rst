@@ -231,6 +231,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.4.4:
+    - Added :func:`~roma.utils.identity_quat()`.
 Version 1.4.3: 
     - Fix normalization bug in :func:`~roma.utils.quat_composition()` (thanks jamiesalter for reporting).
 Version 1.4.2:

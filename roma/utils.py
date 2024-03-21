@@ -97,6 +97,25 @@ def random_rotvec(size = tuple(), dtype=torch.float, device=None):
     quat = random_unitquat(size, dtype=dtype, device=device)
     return roma.mappings.unitquat_to_rotvec(quat)
 
+def identity_quat(size = tuple(), dtype=torch.float, device=None):
+    """
+    Return a batch of identity unit quaternions.
+
+    Args:
+        size (tuple or int): batch size. Use for example ``tuple()`` to generate a single element, and ``(5,2)`` to generate a 5x2 batch.
+    Returns:
+        batch of identity quaternions (size x 4 tensor, XYZW convention).
+    Note:
+        All returned batch quaternions refer to the same memory location.
+        Consider cloning the output tensor prior performing any in-place operations.
+    """
+    if type(size) == int:
+        size = (size,)
+    quat = torch.zeros(4, dtype=dtype, device=device)
+    quat[...,-1] = 1.
+    quat = quat.expand(list(size) + [-1])
+    return quat
+
 def rotmat_cosine_angle(R):
     """
     Returns the cosine angle of the input 3x3 rotation matrix R.
@@ -109,7 +128,6 @@ def rotmat_cosine_angle(R):
     """
     assert R.shape[-2:] == (3,3), "Expecting a ...x3x3 batch of rotation matrices"
     return  0.5 * (R[...,0,0] + R[...,1,1] + R[...,2,2] - 1.0)
-
 
 _ONE_OVER_2SQRT2 = 1.0 / (2 * np.sqrt(2))
 def rotmat_geodesic_distance(R1, R2, clamping=1.0):
