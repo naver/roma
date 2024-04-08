@@ -231,6 +231,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.4.5:
+    - 3-Clause BSD Licensing.
 Version 1.4.4:
     - Added :func:`~roma.utils.identity_quat()`.
 Version 1.4.3: 

@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="roma",
-    version="1.4.4",
+    version="1.4.5",
     author="Romain Brégier",
     author_email="romain.bregier@naverlabs.com",
     description="A lightweight library to deal with 3D rotations in PyTorch.",
@@ -15,7 +15,7 @@ setuptools.setup(
     packages=["roma"],
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: Free for non-commercial use",
+        "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',

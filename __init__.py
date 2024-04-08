@@ -1,7 +1,6 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
-# CC BY-NC-SA 4.0
-# Available only for non-commercial use.
+# 3-Clause BSD License.
 
 # Dirty init so that one can just include this repository as a git submodule.
 from .roma.mappings import *

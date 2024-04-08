@@ -1,8 +1,6 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
-# CC BY-NC-SA 4.0
-# Available only for non-commercial use.
-
+# 3-Clause BSD License.
 import unittest
 import torch
 import roma

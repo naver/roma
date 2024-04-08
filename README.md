@@ -55,7 +55,6 @@ identity = T @ T.inverse()
 M = identity.to_homogeneous()
 ```
 
-
 ## Installation
 The easiest way to install *RoMa* is to use pip:
 ```
@@ -74,7 +73,7 @@ You can check that this module is properly loaded using the function `roma.utils
 
 
 ## License
-*RoMa*, Copyright (c) 2021 NAVER Corp., is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 license (see [license](https://github.com/naver/roma/blob/master/LICENSE)).
+*RoMa*, Copyright (c) 2020 NAVER Corp., is licensed under the 3-Clause BSD License (see [license](https://github.com/naver/roma/blob/master/LICENSE)).
 
 Bits of code were adapted from SciPy. Documentation is generated, distributed and displayed with the support of Sphinx and other materials (see [notice](https://github.com/naver/roma/blob/master/NOTICE)).
 

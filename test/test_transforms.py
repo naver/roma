@@ -1,3 +1,6 @@
+# RoMa
+# Copyright (c) 2020 NAVER Corp.
+# 3-Clause BSD License.
 import torch
 import roma
 from roma.transforms import *

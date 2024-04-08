@@ -1,7 +1,6 @@
 # RoMa
-# Copyright (c) 2021 NAVER Corp.
-# CC BY-NC-SA 4.0
-# Available only for non-commercial use.
+# Copyright (c) 2020 NAVER Corp.
+# 3-Clause BSD License.
 """
 Plot the deviation of various differentiable 3D rotation mappings with respect to their tangent plane, for different step sizes.
 """

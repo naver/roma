@@ -1,7 +1,6 @@
 # RoMa
-# Copyright (c) 2021 NAVER Corp.
-# CC BY-NC-SA 4.0
-# Available only for non-commercial use.
+# Copyright (c) 2020 NAVER Corp.
+# 3-Clause BSD License.
 """
 Execution speed benchmark for different mappings on the 3D rotation space.
 Requires a CUDA-enabled GPU.

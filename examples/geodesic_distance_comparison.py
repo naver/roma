@@ -1,7 +1,6 @@
 # RoMa
-# Copyright (c) 2021 NAVER Corp.
-# CC BY-NC-SA 4.0
-# Available only for non-commercial use.
+# Copyright (c) 2020 NAVER Corp.
+# 3-Clause BSD License.
 """
 Study of numerical stability of rotmat_geodesic_distance_naive and rotmat_geodesic_distance.
 Plot value and gradient of a function consisting given an angle theta in:
