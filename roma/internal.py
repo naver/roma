@@ -105,3 +105,11 @@ except AttributeError:
     # torch.linalg.norm was introduced in PyTorch 1.7, and torch.norm is deprecated.
     def norm(x, dim=None, keepdim=False):
         return torch.norm(x, dim=dim, keepdim=keepdim)
+    
+try:
+    torch.hypot
+    hypot = torch.hypot
+except AttributeError:
+    # torch.hypot is not available in PyTorch 1.6.
+    def hypot(x, y):
+        return torch.sqrt(torch.square(x) + torch.square(y))

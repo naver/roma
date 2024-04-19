@@ -159,7 +159,7 @@ def unitquat_to_euler(convention : str, quat, degrees=False, epsilon=1e-7):
     # Compute second angle...
     angles = [torch.empty(N, device=quat.device, dtype=quat.dtype) for _ in range(3)]
     
-    angles[1] = 2 * torch.atan2(torch.hypot(c, d), torch.hypot(a, b))
+    angles[1] = 2 * torch.atan2(roma.internal.hypot(c, d), roma.internal.hypot(a, b))
 
     # ... and check if equal to is 0 or pi, causing a singularity
     case1 = torch.abs(angles[1]) <= epsilon
