@@ -228,7 +228,7 @@ From source repository::
 
 License
 =======
-*RoMa*, Copyright (c) 2020 NAVER Corp., is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 license (see `license <https://github.com/naver/roma/blob/master/LICENSE>`_).
+*RoMa*, Copyright (c) 2020 NAVER Corp., is licensed under the 3-Clause BSD License (see `license <https://github.com/naver/roma/blob/master/LICENSE>`_).
 
 Bits of code were adapted from SciPy. Documentation is generated, distributed and displayed with the support of Sphinx and other materials (see `notice <https://github.com/naver/roma/blob/master/NOTICE>`_).
 
