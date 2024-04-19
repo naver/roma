@@ -195,6 +195,9 @@ Mappings
 .. automodule:: roma.mappings
    :members:
 
+.. automodule:: roma.euler
+   :members:   
+
 Utils
 ----------
 .. automodule:: roma.utils
@@ -225,12 +228,14 @@ From source repository::
 
 License
 =======
-*RoMa*, Copyright (c) 2021 NAVER Corp., is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 license (see `license <https://github.com/naver/roma/blob/master/LICENSE>`_).
+*RoMa*, Copyright (c) 2020 NAVER Corp., is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 license (see `license <https://github.com/naver/roma/blob/master/LICENSE>`_).
 
 Bits of code were adapted from SciPy. Documentation is generated, distributed and displayed with the support of Sphinx and other materials (see `notice <https://github.com/naver/roma/blob/master/NOTICE>`_).
 
 Changelog
 ==========
+Version 1.5.0:
+    - Added Euler angles mappings.
 Version 1.4.5:
     - 3-Clause BSD Licensing.
 Version 1.4.4:

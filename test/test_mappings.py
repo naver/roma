@@ -7,9 +7,6 @@ import roma
 import numpy as np
 from test.utils import is_close
 
-def is_close(A, B, eps1 = 1e-5, eps2 = 1e-5):
-    return torch.norm(A - B) / (torch.norm(torch.abs(A) + torch.abs(B)) + eps1) < eps2
-
 device = torch.device(0) if torch.cuda.is_available() else torch.device('cpu')
 
 class TestMappings(unittest.TestCase):
@@ -190,7 +187,6 @@ class TestMappings(unittest.TestCase):
             self.assertTrue(quat_xyzw.shape == quat_wxyz.shape)
             quat_xyzw_bis = roma.mappings.quat_wxyz_to_xyzw(quat_wxyz)
             self.assertTrue(torch.all(quat_xyzw == quat_xyzw_bis))
-
 
 if __name__ == "__main__":
     unittest.main()
