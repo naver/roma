@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy ${{matrix.pytorch-version}}
+          pip install numpy ${{matrix.pytorch-version}} --no-cache-dir
 
       - name: Prepare repo
         uses: actions/checkout@master
