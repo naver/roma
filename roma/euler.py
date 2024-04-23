@@ -29,7 +29,7 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
             or with respect to an 'intrinsic' coordinates system attached to the object under rotation (in which case axes are denoted in uppercase: 'X', 'Y', 'Z').
             Intrinsic and extrinsic conventions cannot be mixed.
         angles (list of floats, list of tensors, or tensor): a list of angles associated to each axis, expressed in radians by default.
-            If a single tensor is provided, Euler angles are assumed to be stacked along the latest dimension.
+            If a single tensor is provided, Euler angles are assumed to be stacked along the last dimension.
         degrees (bool): if True, input angles are assumed to be expressed in degrees.
     
     Returns:
@@ -65,14 +65,14 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
         unitquats.append(q)
     return roma.quat_composition(unitquats, normalize=normalize)
 
-def euler_to_rotvec(convention: str, angles : list, degrees=False, dtype=None, device=None):
+def euler_to_rotvec(convention: str, angles, degrees=False, dtype=None, device=None):
     """
     Convert Euler angles to rotation vector representation.
 
     Args:
         convention (string): 'xyz' for example. See :func:`~roma.euler.euler_to_unitquat()`.
         angles (list of floats, list of tensors, or tensor): a list of angles associated to each axis, expressed in radians by default.
-            If a single tensor is provided, Euler angles are assumed to be stacked along the latest dimension.
+            If a single tensor is provided, Euler angles are assumed to be stacked along the last dimension.
         degrees (bool): if True, input angles are assumed to be expressed in degrees.
 
     Returns:
@@ -80,14 +80,14 @@ def euler_to_rotvec(convention: str, angles : list, degrees=False, dtype=None, d
     """
     return roma.unitquat_to_rotvec(euler_to_unitquat(convention=convention, angles=angles, degrees=degrees, dtype=dtype, device=device))
 
-def euler_to_rotmat(convention: str, angles : list, degrees=False, dtype=None, device=None):
+def euler_to_rotmat(convention: str, angles, degrees=False, dtype=None, device=None):
     """
     Convert Euler angles to rotation matrix representation.
 
     Args:
         convention (string): 'xyz' for example. See :func:`~roma.euler.euler_to_unitquat()`.
         angles (list of floats, list of tensors, or tensor): a list of angles associated to each axis, expressed in radians by default.
-            If a single tensor is provided, Euler angles are assumed to be stacked along the latest dimension.
+            If a single tensor is provided, Euler angles are assumed to be stacked along the last dimension.
         degrees (bool): if True, input angles are assumed to be expressed in degrees.
     
     Returns:
