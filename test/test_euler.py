@@ -91,5 +91,21 @@ class TestEuler(unittest.TestCase):
                     angles = roma.rotvec_to_euler('xyz', rotvec)
                     sum(angles).backward()
 
+    def test_euler_tensor(self):
+        """
+        Test that Euler conversion methods support both list and tensor inputs.
+        """
+        batch_shape = (10,34)
+        q = roma.random_unitquat(batch_shape, device=device)
+        convention = 'xyz'
+        angles = roma.unitquat_to_euler(convention, q)
+        angles_tensor = roma.unitquat_to_euler(convention, q, as_tensor=True)
+        assert type(angles) == list
+        assert type(angles_tensor) == torch.Tensor
+        q1 = roma.euler_to_unitquat(convention, angles)
+        q2 = roma.euler_to_unitquat(convention, angles_tensor)
+        self.assertTrue(torch.all(roma.rotmat_geodesic_distance(q1, q2) < 1e-6))
+
+
 if __name__ == "__main__":
     unittest.main()
