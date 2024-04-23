@@ -63,7 +63,10 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
             raise ValueError("Invalid convention (expected format: 'xyz', 'zxz', 'XYZ', etc.).")
         q = roma.rotvec_to_unitquat(rotvec)
         unitquats.append(q)
-    return roma.quat_composition(unitquats, normalize=normalize)
+    if len(unitquats) == 1:
+        return unitquats[0]
+    else:
+        return roma.quat_composition(unitquats, normalize=normalize)
 
 def euler_to_rotvec(convention: str, angles, degrees=False, dtype=None, device=None):
     """
