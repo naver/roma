@@ -30,7 +30,7 @@ class TestEuler(unittest.TestCase):
                         if intrinsics:
                             convention = convention.upper()
                         q = roma.random_unitquat(batch_shape, device=device, dtype=dtype)
-                        angles = roma.unitquat_to_euler(convention, q, degrees=degrees)
+                        angles = roma.unitquat_to_euler(convention, q, degrees=degrees, as_tuple=True)
                         self.assertTrue(len(angles) == 3)
                         self.assertTrue(all([angle.shape == batch_shape for angle in angles]))
                         if degrees:
@@ -52,7 +52,7 @@ class TestEuler(unittest.TestCase):
                         if intrinsics:
                             convention = convention.upper()
                         q = roma.random_rotvec(batch_shape, device=device, dtype=dtype)
-                        angles = roma.rotvec_to_euler(convention, q, degrees=degrees)
+                        angles = roma.rotvec_to_euler(convention, q, degrees=degrees, as_tuple=True)
                         self.assertTrue(len(angles) == 3)
                         self.assertTrue(all([angle.shape == batch_shape for angle in angles]))
                         if degrees:
@@ -74,7 +74,7 @@ class TestEuler(unittest.TestCase):
                         if intrinsics:
                             convention = convention.upper()
                         q = roma.random_rotmat(batch_shape, device=device, dtype=dtype)
-                        angles = roma.rotmat_to_euler(convention, q, degrees=degrees)
+                        angles = roma.rotmat_to_euler(convention, q, degrees=degrees, as_tuple=True)
                         self.assertTrue(len(angles) == 3)
                         self.assertTrue(all([angle.shape == batch_shape for angle in angles]))
                         if degrees:
@@ -101,9 +101,9 @@ class TestEuler(unittest.TestCase):
         dtype = torch.float64
         q = roma.random_unitquat(batch_shape, device=device, dtype=dtype)
         convention = 'xyz'
-        angles = roma.unitquat_to_euler(convention, q)
-        angles_tensor = roma.unitquat_to_euler(convention, q, as_tensor=True)
-        assert type(angles) == list
+        angles = roma.unitquat_to_euler(convention, q, as_tuple=True)
+        angles_tensor = roma.unitquat_to_euler(convention, q)
+        assert type(angles) == tuple
         assert type(angles_tensor) == torch.Tensor
         q1 = roma.euler_to_unitquat(convention, angles)
         q2 = roma.euler_to_unitquat(convention, angles_tensor)

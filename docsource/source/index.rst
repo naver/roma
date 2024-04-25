@@ -57,9 +57,9 @@ Rotation matrix (rotmat)
     - Encoded as a ...xDxD tensor (D=3 for 3D rotations).
     - We use column-vector convention, i.e. :math:`R X` is the transformation of a 1xD vector :math:`X`  by a rotation matrix :math:`R`.
 
-Euler and Tait-Bryan angles (euler)
+Euler angles and Tait-Bryan angles (euler)
     - Encoded as a ...xD tensor or a list of D tensors corresponding to each angle (D=3 for typical Euler angles conventions).
-    - We provide mappings between Euler angles and other rotation representations. To perform actual computations, use an other representation.
+    - We provide mappings between Euler angles and other rotation representations. Euler angles suffer from shortcomings such as gimbal lock, and we recommend using quaternions or rotation matrices to perform actual computations.
 
 
 Mappings between rotation representations
