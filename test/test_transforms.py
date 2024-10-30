@@ -284,4 +284,58 @@ class TestTransforms(unittest.TestCase):
         x1 = rigid.apply(x)
         x2 = rigidunitquat.apply(x)
         self.assertTrue(torch.all(torch.isclose(x1, x2)))
-                    
+
+    def test_translation_only(self):
+        batch_shape = (2,3,6)
+        D = 3
+        dtype = torch.float64
+
+        # Translation-only transformation
+        translation = torch.randn(batch_shape + (D,), dtype=dtype)
+        identity = torch.eye(D, dtype=dtype)[[None] * len(batch_shape)].repeat(batch_shape + (1,1))
+        T = roma.Rigid(identity, translation)
+        T1 = roma.Rigid(None, translation)
+        delta = T1 @ T.inverse()
+        self.assertTrue(delta.linear.shape == T.linear.shape)
+        self.assertTrue(delta.translation.shape == T.translation.shape)
+        epsilon = 1e-7
+        self.assertTrue(torch.all(torch.abs(delta.translation) < epsilon))
+        self.assertTrue(torch.all(torch.isclose(T.linear, T1.linear)))
+
+    def test_identity(self):
+        batch_shape = (3,5)
+        D = 4
+        dtype = torch.float64
+        identity_transform = roma.Rigid.Identity(D, batch_shape=batch_shape)
+        self.assertTrue(torch.all(identity_transform.translation == torch.zeros((3,5,4), dtype=dtype)))
+        self.assertTrue(torch.all(identity_transform.linear == torch.eye(4)[None,None].repeat(3,5,1,1)))
+
+
+    def test_linear_only(self):
+        batch_shape = (2,3,6)
+        D = 3
+        dtype = torch.float64
+        # rotation-only transformation
+        null_translation = torch.zeros(batch_shape + (D,), dtype=dtype)
+        R = roma.random_rotmat(batch_shape, dtype=dtype)
+        T = roma.Rigid(R, null_translation)
+        T1 = roma.Rigid(R, None)
+        delta = T1 @ T.inverse()
+        self.assertTrue(delta.linear.shape == T.linear.shape)
+        self.assertTrue(delta.translation.shape == T.translation.shape)
+        epsilon = 1e-7
+        self.assertTrue(torch.all(torch.abs(delta.translation) < epsilon))
+        self.assertTrue(torch.all(torch.isclose(T.linear, T1.linear)))
+
+    def test_squeezing(self):
+        batch_shape = (2,3,6)
+        D = 3
+        dtype = torch.float64
+        # rotation-only transformation
+        t = torch.randn(batch_shape + (D,), dtype=dtype)
+        R = roma.random_rotmat(batch_shape, dtype=dtype)
+        T = roma.Rigid(R, t)
+        unsqueezed = T[None]
+        squeezed = unsqueezed.squeeze(dim=0)
+        self.assertTrue(torch.all(T.linear == squeezed.linear))
+        self.assertTrue(torch.all(T.translation == squeezed.translation))

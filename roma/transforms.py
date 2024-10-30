@@ -249,7 +249,17 @@ class _BaseAffine:
         """
         Slicing operator, for convenience.
         """
-        return type(self)(self.linear[args], self.translation[args])    
+        return type(self)(self.linear[args], self.translation[args])
+    
+    def squeeze(self, dim):
+        """
+        Return a view of the transformation in which a batch dimension equal to 1 has been squeezed.
+
+        :var dim: positive integer: The dimension to squeeze.
+        """
+        assert dim >= 0, "Only positive dimensions are supported to avoid ambiguities."
+        assert self.linear.shape[dim] == self.translation.shape[dim] == 1, ""
+        return type(self)(self.linear.squeeze(dim), self.translation.squeeze(dim))
     
     def __len__(self):
         return len(self.linear)
@@ -316,9 +326,12 @@ class Affine(_BaseAffine, Linear):
     An affine transformation represented by a linear and a translation part.
 
     :var linear: (...xCxD tensor): batch of matrices specifying the linear part.
-    :var translation: (...xD tensor): batch of matrices specifying the translation part.
+    :var translation: (...xD tensor or None): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
+        if translation is None:
+            # Set a default null translation.
+            translation = torch.zeros(linear.shape[:-2] + (linear.shape[-1],), dtype=linear.dtype, device=linear.device)
         assert translation.shape[-1] == linear.shape[-2], "Incompatible linear and translation dimensions."
         assert len(linear.shape[:-2]) == len(translation.shape[:-1]), "Batch dimensions should be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
@@ -328,20 +341,36 @@ class Isometry(Affine, Orthonormal):
     """
     An isometric transformation represented by an orthonormal and a translation part.
 
-    :var linear: (...xDxD tensor): batch of matrices specifying the linear part.
-    :var translation: (...xD tensor): batch of matrices specifying the translation part.
+    :var linear: (...xDxD tensor or None): batch of matrices specifying the linear part.
+    :var translation: (...xD tensor or None): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
-        assert linear.shape[-1] == linear.shape[-2], "Expecting same dimensions for input and output."
+        if linear is None:
+            # Set a default identity linear part.
+            batch_dims = translation.shape[:-1]
+            D = translation.shape[-1]
+            linear = torch.eye(D, dtype=translation.dtype, device=translation.device)[[None] * len(batch_dims)].expand(batch_dims + (-1,-1))
+        else:
+            assert linear.shape[-1] == linear.shape[-2], "Expecting same dimensions for input and output."
         Affine.__init__(self, linear, translation)
 
+    @classmethod
+    def Identity(cls, dim, batch_shape=tuple(), dtype=torch.float32, device=None):
+        """
+        Return a default identity transformation.
+
+        :var dim: (strictly positive integer): dimension of the space in which the transformation operates (e.g. `dim=3` for 3D transformations).
+        :var batch_shape: (tuple): batch dimensions considered.
+        """
+        translation = torch.zeros(batch_shape + (dim,), dtype=dtype, device=device)
+        return cls(linear=None, translation=translation)
 
 class Rigid(Isometry, Rotation):
     """
     A rigid transformation represented by an rotation and a translation part.
 
-    :var linear: (...xDxD tensor): batch of matrices specifying the linear part.
-    :var translation: (...xD tensor): batch of matrices specifying the translation part.
+    :var linear: (...xDxD tensor or None): batch of matrices specifying the linear part.
+    :var translation: (...xD tensor or None): batch of matrices specifying the translation part.
     """
     def __init__(self, linear, translation):
         Isometry.__init__(self, linear, translation)

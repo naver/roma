@@ -235,6 +235,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.5.1:
+    - Syntactic sugar for :ref:`spatial-transformations`: support for default linear or translation parts, identity transformations and batch dimension squeezing.
 Version 1.5.0:
     - Added Euler angles mappings.
 Version 1.4.5:
