@@ -78,6 +78,13 @@ You can check that this module is properly loaded using the function `roma.utils
 
 Bits of code were adapted from SciPy. Documentation is generated, distributed and displayed with the support of Sphinx and other materials (see [notice](https://github.com/naver/roma/blob/master/NOTICE)).
 
+## Contributing
+Please open an issue on GitHub if you have any suggestions.
+Pull requests are also welcome.
+We aim at keeping RoMa reliable and maintainable, and may accept contribution (whether submitted as suggestions or pull requests) at our discretion to that aim.
+
+By contributing to RoMa, you are agreeing that your contributions (whether suggestions or pull requests) for which you have the right or authority to submit are licensed under its [LICENSE](https://github.com/naver/roma/blob/master/LICENSE).
+
 ## References
 For a more in-depth discussion regarding differentiable mappings on the rotation space, please refer to:
 - [__Romain Brégier, Deep Regression on Manifolds: a 3D Rotation Case Study.__ in _2021 International Conference on 3D Vision (3DV)_, 2021.](https://arxiv.org/abs/2103.16317)

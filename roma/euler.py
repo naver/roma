@@ -7,7 +7,7 @@ import numpy as np
 import roma.internal
 
 def _elementary_basis_index(axis):
-    """
+    r"""
     Return the index corresponding to a given axis label.
     """
     if axis == 'x':
@@ -20,7 +20,7 @@ def _elementary_basis_index(axis):
         raise ValueError("Invalid axis.")
 
 def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dtype=None, device=None):
-    """
+    r"""
     Convert Euler angles to unit quaternion representation.
 
     Args:
@@ -72,7 +72,7 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
         return roma.quat_composition(unitquats, normalize=normalize)
 
 def euler_to_rotvec(convention: str, angles, degrees=False, dtype=None, device=None):
-    """
+    r"""
     Convert Euler angles to rotation vector representation.
 
     Args:
@@ -86,7 +86,7 @@ def euler_to_rotvec(convention: str, angles, degrees=False, dtype=None, device=N
     return roma.unitquat_to_rotvec(euler_to_unitquat(convention=convention, angles=angles, degrees=degrees, dtype=dtype, device=device))
 
 def euler_to_rotmat(convention: str, angles, degrees=False, dtype=None, device=None):
-    """
+    r"""
     Convert Euler angles to rotation matrix representation.
 
     Args:
@@ -100,7 +100,7 @@ def euler_to_rotmat(convention: str, angles, degrees=False, dtype=None, device=N
     return roma.unitquat_to_rotmat(euler_to_unitquat(convention=convention, angles=angles, degrees=degrees, dtype=dtype, device=device))
 
 def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, epsilon=1e-7):
-    """
+    r"""
     Convert unit quaternion to Euler angles representation.
 
     Args:
@@ -209,7 +209,7 @@ def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, eps
         return torch.stack(angles, dim=-1)
 
 def rotvec_to_euler(convention : str, rotvec, as_tuple=False, degrees=False, epsilon=1e-7):
-    """
+    r"""
     Convert rotation vector to Euler angles representation.
 
     Args:
@@ -227,7 +227,7 @@ def rotvec_to_euler(convention : str, rotvec, as_tuple=False, degrees=False, eps
     return unitquat_to_euler(convention, roma.rotvec_to_unitquat(rotvec), as_tuple=as_tuple, degrees=degrees, epsilon=epsilon)
 
 def rotmat_to_euler(convention : str, rotmat, as_tuple=False, degrees=False, epsilon=1e-7):
-    """
+    r"""
     Convert rotation matrix to Euler angles representation.
 
     Args:

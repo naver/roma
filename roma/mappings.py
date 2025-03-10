@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Various mappings between different rotation representations.
 """
 
@@ -58,7 +58,7 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
         return grad_M, None, None, None
 
 def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, return_singular_values : bool = False):
-    """ 
+    r""" 
     Returns the orthonormal matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`.
 
     Args:
@@ -81,7 +81,7 @@ def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, r
         return R, DS
 
 def special_procrustes(M, regularization=0.0, gradient_eps=1e-5, return_singular_values : bool = False):
-    """
+    r"""
     Returns the rotation matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`.
 
     Args:
@@ -97,7 +97,7 @@ def special_procrustes(M, regularization=0.0, gradient_eps=1e-5, return_singular
     return procrustes(M, True, regularization, gradient_eps, return_singular_values)
 
 def procrustes_naive(M, force_rotation : bool = False, return_singular_values : bool = False):
-    """
+    r"""
     Implementation of :func:`~roma.mappings.procrustes` relying on default backward pass of autograd and SVD decomposition.
     Could be slightly less stable than :func:`~roma.mappings.procrustes`.
     """
@@ -127,14 +127,14 @@ def procrustes_naive(M, force_rotation : bool = False, return_singular_values : 
 
 
 def special_procrustes_naive(M, return_singular_values : bool = False):
-    """
+    r"""
     Implementation of :func:`~roma.mappings.special_procrustes` relying on default backward pass of autograd and SVD decomposition.
     Could be slightly less stable than :func:`~roma.mappings.special_procrustes`.
     """
     return procrustes_naive(M, force_rotation=True, return_singular_values=return_singular_values)
 
 def special_gramschmidt(M, epsilon=0):
-    """
+    r"""
     Returns the 3x3 rotation matrix obtained by Gram-Schmidt orthonormalization of two 3D input vectors (first two columns of input matrix M).
 
     Args:
@@ -158,7 +158,7 @@ def special_gramschmidt(M, epsilon=0):
     return roma.internal.unflatten_batch_dims(R, batch_shape)
 
 def symmatrix_to_projective_point(A):
-    """
+    r"""
     Converts a DxD symmetric matrix A into a projective point represented by a unit vector :math:`q` minimizing :math:`q^T A q`.
     Only the lower part of the matrix is considered in practice.
 
@@ -184,7 +184,7 @@ def symmatrix_to_projective_point(A):
     return roma.internal.unflatten_batch_dims(q, batch_shape)
 
 def symmatrixvec_to_unitquat(x):
-    """
+    r"""
     Converts a 10D vector into a unit quaternion representation.
     Based on :func:`~roma.mappings.symmatrix_to_projective_point`.
     
@@ -207,7 +207,7 @@ def symmatrixvec_to_unitquat(x):
     return roma.internal.unflatten_batch_dims(symmatrix_to_projective_point(A), batch_shape)    
 
 def rotvec_to_unitquat(rotvec):
-    """
+    r"""
     Converts rotation vector into unit quaternion representation.
 
     Args:
@@ -238,11 +238,11 @@ def rotvec_to_unitquat(rotvec):
     return roma.internal.unflatten_batch_dims(quat, batch_shape)
 
 def unitquat_to_rotvec(quat, shortest_arc=True):
-    """
+    r"""
     Converts unit quaternion into rotation vector representation.
 
-    Based on the representation of a rotation of angle :math:`{\\theta}` and unit axis :math:`(x,y,z)` 
-    by the unit quaternions :math:`\pm [\sin({\\theta} / 2) (x i + y j + z k) + \cos({\\theta} / 2)]`.
+    Based on the representation of a rotation of angle :math:`{\theta}` and unit axis :math:`(x,y,z)` 
+    by the unit quaternions :math:`\pm [\sin({\theta} / 2) (x i + y j + z k) + \cos({\theta} / 2)]`.
 
     Args:
         quat (...x4 tensor, XYZW convention): batch of unit quaternions.
@@ -281,7 +281,7 @@ def unitquat_to_rotvec(quat, shortest_arc=True):
     return roma.internal.unflatten_batch_dims(rotvec, batch_shape)
 
 def unitquat_to_rotmat(quat):
-    """
+    r"""
     Converts unit quaternion into rotation matrix representation.
 
     Args:
@@ -325,7 +325,7 @@ def unitquat_to_rotmat(quat):
     return matrix
 
 def rotmat_to_unitquat(R):
-    """
+    r"""
     Converts rotation matrix to unit quaternion representation.
 
     Args:
@@ -367,7 +367,7 @@ def rotmat_to_unitquat(R):
     return roma.internal.unflatten_batch_dims(quat, batch_shape)
 
 def rotvec_to_rotmat(rotvec: torch.Tensor, epsilon=1e-6) -> torch.Tensor:
-    """
+    r"""
     Converts rotation vector to rotation matrix representation.
     Conversion uses Rodrigues formula in general, and a first order approximation for small angles.
     
@@ -417,7 +417,7 @@ def rotvec_to_rotmat(rotvec: torch.Tensor, epsilon=1e-6) -> torch.Tensor:
     return roma.internal.unflatten_batch_dims(R, batch_shape)
     
 def rotmat_to_rotvec(R):
-    """
+    r"""
     Converts rotation matrix to rotation vector representation.
 
     Args:
@@ -429,7 +429,7 @@ def rotmat_to_rotvec(R):
     return unitquat_to_rotvec(q)
 
 def quat_xyzw_to_wxyz(xyzw):
-    """
+    r"""
     Convert quaternion from XYZW to WXYZ convention.
 
     Args:
@@ -441,7 +441,7 @@ def quat_xyzw_to_wxyz(xyzw):
     return torch.cat((xyzw[...,-1,None], xyzw[...,:-1]), dim=-1)
 
 def quat_wxyz_to_xyzw(wxyz):
-    """
+    r"""
     Convert quaternion from WXYZ to XYZW convention.
 
     Args:

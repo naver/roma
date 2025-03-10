@@ -20,8 +20,9 @@ def central_difference(func, x, v, eps):
     return df
 
 def numerical_jacobian(func, x, eps):
-    """
-    jacobian: a tensor of shape (func(x).shape) times x.shape.
+    r"""
+    Returns:
+        jacobian: a tensor of shape (func(x).shape) times x.shape.
     """
     output = func(x)
     jacobian = torch.zeros(output.shape + x.shape)
@@ -32,8 +33,9 @@ def numerical_jacobian(func, x, eps):
     return jacobian
 
 def automatic_jacobian(func, x):
-    """
-    jacobian: a tensor of shape (func(x).shape) times x.shape.
+    r"""
+    Returns:
+        jacobian: a tensor of shape (func(x).shape) times x.shape.
     """
     output = func(x)
     jacobian = torch.zeros(output.shape + x.shape)
@@ -43,21 +45,3 @@ def automatic_jacobian(func, x):
         y[output_indices].backward()
         jacobian[output_indices] = x.grad
     return jacobian
-
-def debug_on(*exceptions):
-    """
-    Useful decorator to launch pdb in case of error in tests.
-    """
-    if not exceptions:
-        exceptions = (AssertionError, )
-    def decorator(f):
-        @functools.wraps(f)
-        def wrapper(*args, **kwargs):
-            try:
-                return f(*args, **kwargs)
-            except exceptions:
-                info = sys.exc_info()
-                traceback.print_exception(*info) 
-                pdb.post_mortem(info[2])
-        return wrapper
-    return decorator

@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Set of functions for internal module use.
 """
 
@@ -14,7 +14,7 @@ try:
     # Should raise an AttributeError exception if undefined.
     torch.linalg.svd
     def svd(M):
-        """
+        r"""
         Singular Value Decomposition wrapper.
         
         Args:
@@ -37,7 +37,7 @@ if  _torch_version_major == 0 or (_torch_version_major == 1 and _torch_version_m
         import torch_batch_svd
         _IS_TORCH_BATCH_SVD_AVAILABLE = True
         def svd(M):
-            """
+            r"""
             Singular Value Decomposition wrapper, using efficient batch decomposition on GPU.
 
             Args:
@@ -54,7 +54,7 @@ if  _torch_version_major == 0 or (_torch_version_major == 1 and _torch_version_m
 del _torch_version_major, _torch_version_minor
 
 def flatten_batch_dims(tensor, end_dim):
-    """
+    r"""
     :meta private:
     Utility function: flatten multiple batch dimensions into a single one, or add a batch dimension if there is none.
     """
@@ -63,7 +63,7 @@ def flatten_batch_dims(tensor, end_dim):
     return flattened, batch_shape
 
 def unflatten_batch_dims(tensor, batch_shape):
-    """
+    r"""
     :meta private:
     Revert flattening of a tensor.
     """
@@ -71,7 +71,7 @@ def unflatten_batch_dims(tensor, batch_shape):
     return tensor.reshape(batch_shape + tensor.shape[1:]) if len(batch_shape) > 0 else tensor.squeeze(0)
 
 def _pseudo_inverse(x, eps):
-    """
+    r"""
     :meta private:
     Element-wise pseudo inverse.
     """
@@ -84,14 +84,14 @@ def _pseudo_inverse(x, eps):
 try:
     torch.linalg.eigh
     def symeig_lower(A):
-        """
+        r"""
         Batched eigenvalue decomposition. Only the lower part of the matrix is considered.
         """
         return torch.linalg.eigh(A, UPLO='L')
 except (NameError, AttributeError):
     # Older PyTorch version
     def symeig_lower(A):
-        """
+        r"""
         Batched eigenvalue decomposition. Only the lower part of the matrix is considered.
         """
         return torch.symeig(A, upper=False, eigenvectors=True)

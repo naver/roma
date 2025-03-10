@@ -130,7 +130,7 @@ def rotmat_cosine_angle(R):
 
 _ONE_OVER_2SQRT2 = 1.0 / (2 * np.sqrt(2))
 def rotmat_geodesic_distance(R1, R2, clamping=1.0):
-    """
+    r"""
     Returns the angular distance alpha between a pair of rotation matrices.
     Based on the equality :math:`|R_2 - R_1|_F = 2 \sqrt{2} sin(alpha/2)`.
 
@@ -160,7 +160,7 @@ def rotmat_geodesic_distance_naive(R1, R2):
 
 
 def unitquat_geodesic_distance(q1, q2):
-    """
+    r"""
     Returns the angular distance alpha between rotations represented by **unit** quaternions.
     Based on the equality :math:`min |q_2 \pm q_1| = 2 |sin(alpha/4)|`.
 
@@ -442,7 +442,7 @@ def rotmat_slerp(R0, R1, steps):
     return roma.mappings.unitquat_to_rotmat(interpolated_q)
 
 def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
-    """
+    r"""
     Returns the rotation matrix :math:`R` and the optional scaling :math:`s` that best align an input list of vectors :math:`(x_i)_{i=1...n}` to a target list of vectors :math:`(y_i)_{i=1...n}`
     by minimizing the sum of square distance :math:`\sum_i w_i \|s R x_i - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
     See :func:`~roma.utils.rigid_points_registration` for details.
@@ -478,7 +478,7 @@ def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
         return R
 
 def rigid_points_registration(x, y, weights=None, compute_scaling=False):
-    """
+    r"""
     Returns the rigid transformation :math:`(R,t)` and the optional scaling :math:`s` that best align an input list of points :math:`(x_i)_{i=1...n}` to a target list of points :math:`(y_i)_{i=1...n}`,
     by minimizing the sum of square distance :math:`\sum_i w_i \|s R x_i + t - y_i\|^2`, where :math:`(w_i)_{i=1...n}` denotes optional positive weights.
     This is sometimes referred to as the Kabsch/Umeyama algorithm.

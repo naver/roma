@@ -244,7 +244,7 @@ class TestTransforms(unittest.TestCase):
             self.assertTrue(torch.all(torch.isclose(rigidq.linear, rigidq1.linear)))
 
     def test_affine_different_dims(self):
-        """
+        r"""
         Tests with various input and output spatial dimensions.
         """
         batch_shape = (10,4)

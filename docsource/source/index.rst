@@ -235,6 +235,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.5.2:
+    - Use raw docstrings to avoid 'SyntaxWarning: invalid escape sequence' messages with Python>=3.12 (thanks chenzhek for the suggestion).
 Version 1.5.1:
     - Syntactic sugar for :ref:`spatial-transformations`: support for default linear or translation parts, identity transformations and batch dimension squeezing.
 Version 1.5.0:

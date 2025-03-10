@@ -44,7 +44,7 @@ import torch
 import roma
  
 class Linear:
-    """
+    r"""
     A linear transformation parameterized by a matrix :math:`M \in \mathcal{M}_{D,C}(\mathbb{R})`,
     transforming a point :math:`x \in \mathbb{R}^C` into :math:`M x`.
 
@@ -54,7 +54,7 @@ class Linear:
         self.linear = linear
 
     def linear_compose(self, other):
-        """
+        r"""
         Compose the linear part of two transformations.
 
         Args:
@@ -66,14 +66,14 @@ class Linear:
         return torch.einsum("...ik, ...kj -> ...ij", self.linear, other.linear)
     
     def linear_inverse(self):
-        """
+        r"""
         Returns:
             The inverse of the linear transformation, when applicable.
         """
         return torch.inverse(self.linear)
     
     def linear_apply(self, v):
-        """
+        r"""
         Transforms a tensor of vector coordinates.
 
         Args:
@@ -91,7 +91,7 @@ class Linear:
         return self.linear
     
     def compose(self, other):
-        """
+        r"""
         Compose a transformation with the current one.
 
         Args:
@@ -122,7 +122,7 @@ class Linear:
         return self.linear_apply(v)
     
     def normalize(self):
-        """
+        r"""
         Returns:
             Copy of the transformation, normalized to ensure the class properties
             (for example to ensure that a :class:`Rotation` object is an actual rotation).
@@ -130,13 +130,13 @@ class Linear:
         return type(self)(self.linear_normalize())
     
     def __matmul__(self, other):
-        """
+        r"""
         Overloading of the `@` operator for composition.
         """
         return self.compose(other)
     
     def __getitem__(self, args):
-        """
+        r"""
         Slicing operator, for convenience.
         """
         return type(self)(self.linear[args])
@@ -145,14 +145,14 @@ class Linear:
         return f"{type(self).__name__}(linear={self.linear.__repr__()})"
     
     def clone(self):
-        """
+        r"""
         Returns:
             A copy of the transformation (useful to avoid aliasing issues).
         """
         return type(self)(self.linear.clone())
 
 class Orthonormal(Linear):
-    """
+    r"""
     An orthogonal transformation represented by an orthonormal matrix :math:`M \in \mathcal{M}_{D,D}(\mathbb{R})`,
     transforming a point :math:`x \in \mathbb{R}^D` into :math:`M x`.
 
@@ -166,14 +166,14 @@ class Orthonormal(Linear):
         return self.linear.transpose(-1,-2)
 
     def linear_normalize(self):
-        """
+        r"""
         Returns:
             Linear transformation normalized to an orthonormal matrix (...xDxD tensor).
         """        
         return roma.mappings.procrustes(self.linear)
     
 class Rotation(Orthonormal):
-    """
+    r"""
     A rotation represented by a rotation matrix :math:`R \in \mathcal{M}_{D,D}(\mathbb{R})`,
     transforming a point :math:`x \in \mathbb{R}^D` into :math:`R x`.
 
@@ -183,14 +183,14 @@ class Rotation(Orthonormal):
         super().__init__(linear)
 
     def linear_normalize(self):
-        """
+        r"""
         Returns:
             Linear transformation normalized to a rotation matrix (...xDxD tensor).
         """
         return roma.mappings.special_procrustes(self.linear)
     
 class RotationUnitQuat(Linear):
-    """
+    r"""
     A 3D rotation represented by a unit quaternion.
     
     :var linear: (...x4 tensor, XYZW convention): batch of unit quaternions defining the rotation.
@@ -212,7 +212,7 @@ class RotationUnitQuat(Linear):
         return roma.utils.quat_conjugation(self.linear)
                                        
     def linear_normalize(self):
-        """
+        r"""
         Returns:
             Normalized unit quaternion (...x4 tensor).
         """
@@ -220,7 +220,7 @@ class RotationUnitQuat(Linear):
         return unitquat
 
 class _BaseAffine:
-    """
+    r"""
     Abstract base class representing an affinity transformation.
     """
     def __init__(self, linear, translation):
@@ -246,13 +246,13 @@ class _BaseAffine:
         return type(self)(linear, self.translation)
     
     def __getitem__(self, args):
-        """
+        r"""
         Slicing operator, for convenience.
         """
         return type(self)(self.linear[args], self.translation[args])
     
     def squeeze(self, dim):
-        """
+        r"""
         Return a view of the transformation in which a batch dimension equal to 1 has been squeezed.
 
         :var dim: positive integer: The dimension to squeeze.
@@ -268,14 +268,14 @@ class _BaseAffine:
         return f"{type(self).__name__}(linear={self.linear.__repr__()}, translation={self.translation.__repr__()})"
 
     def as_tuple(self):
-        """
+        r"""
         Returns:
             a tuple of tensors containing the linear and translation parts of the transformation respectively.
         """
         return self.linear, self.translation
     
     def clone(self):
-        """
+        r"""
         Returns:
             A copy of the transformation (useful to avoid aliasing issues).
         """
@@ -283,7 +283,7 @@ class _BaseAffine:
     
 
     def to_homogeneous(self, output=None):
-        """
+        r"""
         Args:
             output (...x(D+1)x(C+1) tensor or None): optional tensor in which to store the result.
 
@@ -304,7 +304,7 @@ class _BaseAffine:
 
     @classmethod
     def from_homogeneous(class_object, matrix):
-        """
+        r"""
         Instantiate a new transformation from an input homogeneous (D+1)x(C+1) matrix.
         The input matrix is assumed to be normalized and to satisfy the properties of the transformation. No checks are performed.
 
@@ -322,7 +322,7 @@ class _BaseAffine:
         return class_object(linear, translation)
                                        
 class Affine(_BaseAffine, Linear):
-    """
+    r"""
     An affine transformation represented by a linear and a translation part.
 
     :var linear: (...xCxD tensor): batch of matrices specifying the linear part.
@@ -338,7 +338,7 @@ class Affine(_BaseAffine, Linear):
 
 
 class Isometry(Affine, Orthonormal):
-    """
+    r"""
     An isometric transformation represented by an orthonormal and a translation part.
 
     :var linear: (...xDxD tensor or None): batch of matrices specifying the linear part.
@@ -356,7 +356,7 @@ class Isometry(Affine, Orthonormal):
 
     @classmethod
     def Identity(cls, dim, batch_shape=tuple(), dtype=torch.float32, device=None):
-        """
+        r"""
         Return a default identity transformation.
 
         :var dim: (strictly positive integer): dimension of the space in which the transformation operates (e.g. `dim=3` for 3D transformations).
@@ -366,7 +366,7 @@ class Isometry(Affine, Orthonormal):
         return cls(linear=None, translation=translation)
 
 class Rigid(Isometry, Rotation):
-    """
+    r"""
     A rigid transformation represented by an rotation and a translation part.
 
     :var linear: (...xDxD tensor or None): batch of matrices specifying the linear part.
@@ -376,7 +376,7 @@ class Rigid(Isometry, Rotation):
         Isometry.__init__(self, linear, translation)
 
     def to_rigidunitquat(self):
-        """
+        r"""
         Returns the corresponding RigidUnitQuat transformation.
 
         Note:
@@ -385,7 +385,7 @@ class Rigid(Isometry, Rotation):
         return RigidUnitQuat(roma.rotmat_to_unitquat(self.linear), self.translation)
 
 class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
-    """
+    r"""
     A rigid transformation represented by a unit quaternion and a translation part.
 
     :var linear: (...x4 tensor): batch of unit quaternions defining the rotation.
@@ -401,7 +401,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         _BaseAffine.__init__(self, linear, translation)
 
     def to_homogeneous(self, output=None):
-        """
+        r"""
         Args:
             output (...x4x4 tensor or None): tensor in which to store the result (optional).
 
@@ -424,7 +424,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
 
     @staticmethod
     def from_homogeneous(matrix):
-        """
+        r"""
         Instantiate a new transformation from an input homogeneous (D+1)x(D+1) matrix.
 
         Args:
@@ -446,7 +446,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         return RigidUnitQuat(linear, translation)
     
     def to_rigid(self):
-        """
+        r"""
         Returns the corresponding Rigid transformation.
 
         Note:
