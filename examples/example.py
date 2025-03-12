@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Example showcasing some possibilities of the library.
 """
 

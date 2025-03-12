@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Plot computation time of special_procrustes using regular torch.svd decomposition versus batch SVD decomposition when available.
 Requires a CUDA-enabled GPU.
 """

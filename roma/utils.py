@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Various utility functions related to rotation representations.
 """
 
@@ -11,13 +11,13 @@ import roma.internal
 import roma.mappings
 
 def is_torch_batch_svd_available() -> bool:
-    """
+    r"""
     Returns True if the module 'torch_batch_svd' has been loaded. Returns False otherwise.
     """
     return roma.internal._IS_TORCH_BATCH_SVD_AVAILABLE
 
 def is_orthonormal_matrix(R, epsilon=1e-7):
-    """
+    r"""
     Test if matrices are orthonormal.
 
     Args:
@@ -35,7 +35,7 @@ def is_orthonormal_matrix(R, epsilon=1e-7):
     return torch.all(errors < epsilon)
     
 def is_rotation_matrix(R, epsilon=1e-7):
-    """
+    r"""
     Test if matrices are rotation matrices.
 
     Args:
@@ -49,7 +49,7 @@ def is_rotation_matrix(R, epsilon=1e-7):
     return torch.all(torch.det(R) > 0)
 
 def random_unitquat(size = tuple(), dtype=torch.float, device=None):
-    """
+    r"""
     Generates a batch of random unit quaternions, uniformly sampled according to the usual quaternion metric.
 
     Args:
@@ -72,7 +72,7 @@ def random_unitquat(size = tuple(), dtype=torch.float, device=None):
     return torch.stack((r1 * torch.sin(theta1), r1 * torch.cos(theta1), r2 * torch.sin(theta2), r2 * torch.cos(theta2)), dim=-1)
 
 def random_rotmat(size  = tuple(), dtype=torch.float, device=None):
-    """
+    r"""
     Generates a batch of random 3x3 rotation matrices, uniformly sampled according to the usual rotation metric.
 
     Args:
@@ -85,7 +85,7 @@ def random_rotmat(size  = tuple(), dtype=torch.float, device=None):
     return R
 
 def random_rotvec(size = tuple(), dtype=torch.float, device=None):
-    """
+    r"""
     Generates a batch of random rotation vectors, uniformly sampled according to the usual rotation metric.
 
     Args:
@@ -97,7 +97,7 @@ def random_rotvec(size = tuple(), dtype=torch.float, device=None):
     return roma.mappings.unitquat_to_rotvec(quat)
 
 def identity_quat(size = tuple(), dtype=torch.float, device=None):
-    """
+    r"""
     Return a batch of identity unit quaternions.
 
     Args:
@@ -116,7 +116,7 @@ def identity_quat(size = tuple(), dtype=torch.float, device=None):
     return quat
 
 def rotmat_cosine_angle(R):
-    """
+    r"""
     Returns the cosine angle of the input 3x3 rotation matrix R.
     Based on the equality :math:`Trace(R) = 1 + 2 cos(alpha)`.
 
@@ -145,7 +145,7 @@ def rotmat_geodesic_distance(R1, R2, clamping=1.0):
     return 2.0 * torch.asin(torch.clamp_max(torch.norm(R2 - R1, dim=[-1, -2]) * _ONE_OVER_2SQRT2, clamping))
 
 def rotmat_geodesic_distance_naive(R1, R2):
-    """
+    r"""
     Returns the angular distance between a pair of rotation matrices.
     Based on :func:`~rotmat_cosine_angle` and less precise than :func:`~roma.utils.rotmat_geodesic_distance` for nearby rotations.
     
@@ -172,7 +172,7 @@ def unitquat_geodesic_distance(q1, q2):
     return 4.0 * torch.asin(0.5 * torch.min(roma.internal.norm(q2 - q1, dim=-1), roma.internal.norm(q2 + q1, dim=-1)))
 
 def rotvec_geodesic_distance(vec1, vec2):
-    """
+    r"""
     Returns the angular distance between rotations represented by rotation vectors.
     (use a conversion to unit quaternions internally).
 
@@ -184,7 +184,7 @@ def rotvec_geodesic_distance(vec1, vec2):
     return unitquat_geodesic_distance(roma.mappings.rotvec_to_unitquat(vec1), roma.mappings.rotvec_to_unitquat(vec2))
 
 def quat_conjugation(quat):
-    """
+    r"""
     Returns the conjugation of input batch of quaternions.
 
     Args:
@@ -199,7 +199,7 @@ def quat_conjugation(quat):
     return inv
 
 def quat_inverse(quat):
-    """
+    r"""
     Returns the inverse of a batch of quaternions.
 
     Args:
@@ -213,7 +213,7 @@ def quat_inverse(quat):
     return quat_conjugation(quat) / torch.sum(quat**2, dim=-1, keepdim=True)
 
 def quat_normalize(quat):
-    """
+    r"""
     Returns a normalized, unit norm, copy of a batch of quaternions.
 
     Args:
@@ -224,7 +224,7 @@ def quat_normalize(quat):
     return quat / roma.internal.norm(quat, dim=-1, keepdim=True)
 
 def quat_product(p, q):
-    """
+    r"""
     Returns the product of two quaternions.
 
     Args:
@@ -249,7 +249,7 @@ def quat_product(p, q):
     return torch.cat((vector, last[...,None]), dim=-1)
 
 def quat_composition(sequence, normalize = False):
-    """
+    r"""
     Returns the product of a sequence of quaternions.
 
     Args:
@@ -267,7 +267,7 @@ def quat_composition(sequence, normalize = False):
     return res
 
 def quat_action(q, v, is_normalized=False):
-    """
+    r"""
     Rotate a 3D vector :math:`v=(x,y,z)` by a rotation represented by a quaternion `q`.
 
     Based on the action by conjugation :math:`q,v : q v q^{-1}`, considering the pure quaternion :math:`v=xi + yj +zk` by abuse of notation.
@@ -289,7 +289,7 @@ def quat_action(q, v, is_normalized=False):
     return res[...,:3]
 
 def rotvec_inverse(rotvec):
-    """
+    r"""
     Returns the inverse of the input rotation expressed using rotation vector representation.
 
     Args:
@@ -300,7 +300,7 @@ def rotvec_inverse(rotvec):
     return -rotvec
 
 def rotvec_composition(sequence, normalize = False):
-    """
+    r"""
     Returns a rotation vector corresponding to the composition of a sequence of rotations represented by rotation vectors.
     Composition is performed using an intermediary quaternion representation.
 
@@ -314,7 +314,7 @@ def rotvec_composition(sequence, normalize = False):
     return roma.unitquat_to_rotvec(q)
 
 def rotmat_inverse(R):
-    """
+    r"""
     Returns the inverse of a rotation matrix.
 
     Args:
@@ -327,7 +327,7 @@ def rotmat_inverse(R):
     return R.transpose(-1, -2)
 
 def rotmat_composition(sequence, normalize = False):
-    """
+    r"""
     Returns the product of a sequence of rotation matrices.
 
     Args:
@@ -345,7 +345,7 @@ def rotmat_composition(sequence, normalize = False):
     return result
 
 def unitquat_slerp(q0, q1, steps, shortest_arc=True):
-    """
+    r"""
     Spherical linear interpolation between two unit quaternions.
     
     Args: 
@@ -371,7 +371,7 @@ def unitquat_slerp(q0, q1, steps, shortest_arc=True):
     return interpolated_q
 
 def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
-    """
+    r"""
     Spherical linear interpolation between two unit quaternions.
     This function requires less computations than :func:`roma.utils.unitquat_slerp`,
     but is **unsuitable for extrapolation (i.e.** ``steps`` **must be within [0,1])**.
@@ -412,7 +412,7 @@ def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
     return q.reshape(steps.shape + batch_shape + (4,))
     
 def rotvec_slerp(rotvec0, rotvec1, steps):
-    """
+    r"""
     Spherical linear interpolation between two rotation vector representations.
 
     Args:
@@ -427,7 +427,7 @@ def rotvec_slerp(rotvec0, rotvec1, steps):
     return roma.mappings.unitquat_to_rotvec(interpolated_q)
 
 def rotmat_slerp(R0, R1, steps):
-    """
+    r"""
     Spherical linear interpolation between two rotation matrices.
 
     Args:

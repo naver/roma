@@ -94,7 +94,7 @@ class TestEuler(unittest.TestCase):
                     sum(angles).backward()
 
     def test_euler_tensor(self):
-        """
+        r"""
         Test that Euler conversion methods support both list and tensor inputs.
         """
         batch_shape = (10,34)

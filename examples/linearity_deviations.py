@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Plot the deviation of various differentiable 3D rotation mappings with respect to their tangent plane, for different step sizes.
 """
 
@@ -20,7 +20,7 @@ vecs1 = torch.nn.functional.normalize(torch.randn(n, 3, 1), dim=1)
 vecs2 = torch.nn.functional.normalize(torch.randn(n, 1, 3), dim=2)
 
 def compute_deviations(func, shape, epsilon, sigma = 1.0):
-    """
+    r"""
     Compute an estimation of the 'linearity' of a mapping operator f.
     """
     deviations = []

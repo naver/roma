@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Spatial transformations parameterized by rotation matrices, unit quaternions and more.
 
 Example of use
@@ -103,14 +103,14 @@ class Linear:
         return type(self)(self.linear_compose(other))
     
     def inverse(self):
-        """
+        r"""
         Returns:
             The inverse transformation, when applicable.
         """
         return type(self)(self.linear_inverse())
     
     def apply(self, v):
-        """
+        r"""
         Transforms a tensor of points coordinates. See :ref:`apply-transformation`.
 
         Args:

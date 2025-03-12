@@ -34,7 +34,7 @@ class TestProcrustesDerivatives(unittest.TestCase):
             self.assertTrue(utils.is_close(num, auto, eps2=eps2))
 
     def _test_convergence(self, random_initialization, regularization=0.0):
-        """
+        r"""
         Try to solve an optimization problem using Special Procrustes on SO(3)
         """
         device=torch.device(0) if torch.cuda.is_available() else None

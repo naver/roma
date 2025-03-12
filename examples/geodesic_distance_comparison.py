@@ -1,7 +1,7 @@
 # RoMa
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
-"""
+r"""
 Study of numerical stability of rotmat_geodesic_distance_naive and rotmat_geodesic_distance.
 Plot value and gradient of a function consisting given an angle theta in:
 - generating a rotation matrix of angle theta

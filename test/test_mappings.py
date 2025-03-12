@@ -170,7 +170,7 @@ class TestMappings(unittest.TestCase):
         self.assertTrue(torch.all(torch.isfinite(rotvec.grad)))
 
     def test_rotvec_unitquat_nan_issues(self):
-        """
+        r"""
         Check that casting using rotation vectors does not lead to non finite values with 0 angles.
         """
         rotvec = torch.zeros(3, requires_grad=True)
