@@ -349,7 +349,10 @@ class Isometry(Affine, Orthonormal):
             # Set a default identity linear part.
             batch_dims = translation.shape[:-1]
             D = translation.shape[-1]
-            linear = torch.eye(D, dtype=translation.dtype, device=translation.device)[[None] * len(batch_dims)].expand(batch_dims + (-1,-1))
+            if len(batch_dims) == 0:
+                linear = torch.eye(D, dtype=translation.dtype, device=translation.device)
+            else:
+                linear = torch.eye(D, dtype=translation.dtype, device=translation.device)[[None] * len(batch_dims)].expand(batch_dims + (-1,-1))
         else:
             assert linear.shape[-1] == linear.shape[-2], "Expecting same dimensions for input and output."
         Affine.__init__(self, linear, translation)
