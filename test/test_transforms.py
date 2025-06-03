@@ -303,13 +303,25 @@ class TestTransforms(unittest.TestCase):
         self.assertTrue(torch.all(torch.isclose(T.linear, T1.linear)))
 
     def test_identity(self):
-        batch_shape = (3,5)
         D = 4
+        batch_shape = (3,5)
         dtype = torch.float64
-        identity_transform = roma.Rigid.Identity(D, batch_shape=batch_shape)
-        self.assertTrue(torch.all(identity_transform.translation == torch.zeros((3,5,4), dtype=dtype)))
-        self.assertTrue(torch.all(identity_transform.linear == torch.eye(4)[None,None].repeat(3,5,1,1)))
+        identity_transform = roma.Rigid.identity(D, batch_shape=batch_shape)
+        self.assertTrue(torch.all(identity_transform.translation == torch.zeros((3,5,D), dtype=dtype)))
+        self.assertTrue(torch.all(identity_transform.linear == torch.eye(D)[None,None].repeat(3,5,1,1)))
 
+        identity_transform2 = roma.Rigid.identity_like(identity_transform)
+        self.assertTrue(torch.all(identity_transform2.translation == torch.zeros((3,5,D), dtype=dtype)))
+        self.assertTrue(torch.all(identity_transform2.linear == torch.eye(4)[None,None].repeat(3,5,1,1)))
+
+        # Test with no batch dimension
+        identity_transform3 = roma.Rigid.identity(D)
+        self.assertTrue(torch.all(identity_transform3.translation == torch.zeros((D,), dtype=dtype)))
+        self.assertTrue(torch.all(identity_transform3.linear == torch.eye(D, dtype=dtype)))
+
+        identity_transform4 = roma.Rigid.identity_like(identity_transform3)
+        self.assertTrue(torch.all(identity_transform4.translation == torch.zeros((D,), dtype=dtype)))
+        self.assertTrue(torch.all(identity_transform4.linear == torch.eye(D, dtype=dtype)))
 
     def test_linear_only(self):
         batch_shape = (2,3,6)

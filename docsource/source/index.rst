@@ -235,6 +235,9 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.5.3:
+    - Introduced ``roma.Isometry.identity`` and ``roma.Isometry.identity_like`` (``roma.Isometry.Identity`` is now deprecated).
+    - Minor fixes.
 Version 1.5.2:
     - Use raw docstrings to avoid 'SyntaxWarning: invalid escape sequence' messages with Python>=3.12 (thanks chenzhek for the suggestion).
 Version 1.5.1:

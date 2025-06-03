@@ -42,6 +42,7 @@ Aliasing issues
 """
 import torch
 import roma
+import warnings
  
 class Linear:
     r"""
@@ -358,7 +359,17 @@ class Isometry(Affine, Orthonormal):
         Affine.__init__(self, linear, translation)
 
     @classmethod
-    def Identity(cls, dim, batch_shape=tuple(), dtype=torch.float32, device=None):
+    def Identity(cls, *args, **kwargs):
+        warnings.warn(
+            "Isometry.Identity is deprecated and will be removed in a future release."
+            "Use Isometry.identity instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return cls.identity(*args, **kwargs)
+
+    @classmethod
+    def identity(cls, dim, batch_shape=tuple(), dtype=torch.float32, device=None):
         r"""
         Return a default identity transformation.
 
@@ -367,6 +378,15 @@ class Isometry(Affine, Orthonormal):
         """
         translation = torch.zeros(batch_shape + (dim,), dtype=dtype, device=device)
         return cls(linear=None, translation=translation)
+    
+    @classmethod
+    def identity_like(cls, other):
+        r"""
+        Return an identity transformation with the same batch shape, type and device as the input transformation.
+
+        :var other: (Isometry): input transformation.
+        """
+        return cls.identity(dim=other.translation.shape[-1], batch_shape=other.translation.shape[:-1], dtype=other.linear.dtype, device=other.linear.device)
 
 class Rigid(Isometry, Rotation):
     r"""
