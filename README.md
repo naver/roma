@@ -1,3 +1,5 @@
+
+
 # *RoMa*: A lightweight library to deal with 3D rotations in PyTorch.
 [![Documentation](https://img.shields.io/badge/Documentation--33cb56)](https://naver.github.io/roma/)
 [![PyPI version](https://badge.fury.io/py/roma.svg)](https://badge.fury.io/py/roma)
@@ -8,6 +10,8 @@
 *RoMa* (which stands for Rotation Manipulation) provides differentiable mappings between 3D rotation representations, mappings from Euclidean to rotation space, and various utilities related to rotations.
 
 It is implemented in PyTorch and aims to be an easy-to-use and reasonably efficient toolbox for Machine Learning and gradient-based optimization.
+
+<img src="docsource/source/roma_logo.png" alt="Logo" width="120"/>
 
 ## Documentation
 Latest documentation is available here: https://naver.github.io/roma/.

@@ -4,11 +4,16 @@ RoMa: A lightweight library to deal with 3D rotations in PyTorch.
 *RoMa* (which stands for *Rotation Manipulation*) provides differentiable mappings between 3D rotation representations, mappings from Euclidean to rotation space, and various utilities related to rotations.
 It is implemented in PyTorch and aims to be an easy-to-use and reasonably efficient toolbox for Machine Learning and gradient-based optimization.
 
+.. image:: roma_logo.png
+    :alt: RoMa logo
+    :align: center
+    :width: 200px
 
-| For a more in-depth discussion regarding differentiable mappings on the rotation space, please refer to:
-| **Romain Brégier, Deep Regression on Manifolds: A 3D Rotation Case Study.** in 2021 International Conference on 3D Vision (3DV), 2021. (https://arxiv.org/abs/2103.16317).
+For a more comprehensive discussion on differentiable mappings in the 3D rotation space, see:
 
-Additionally, please cite this work if you use *RoMa* for your research:
+    **Romain Brégier, Deep Regression on Manifolds: A 3D Rotation Case Study.** in 2021 International Conference on 3D Vision (3DV), 2021. (https://arxiv.org/abs/2103.16317).
+
+Please cite this work if you use *RoMa* for your research:
 ::
 
     @inproceedings{bregier2021deepregression,
