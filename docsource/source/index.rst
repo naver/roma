@@ -240,6 +240,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.5.4:
+    - Cast inputs of :func:`~roma.mappings.procrustes()` to float32 when using autocast.
 Version 1.5.3:
     - Introduced ``roma.Isometry.identity`` and ``roma.Isometry.identity_like`` (``roma.Isometry.Identity`` is now deprecated).
     - Minor fixes.

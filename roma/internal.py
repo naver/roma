@@ -113,3 +113,15 @@ except AttributeError:
     # torch.hypot is not available in PyTorch 1.6.
     def hypot(x, y):
         return torch.sqrt(torch.square(x) + torch.square(y))
+
+# torch.amp.custom_fwd and torch.amp.custom_bwd were not available in PyTorch 1.6.
+try:
+    custom_fwd = torch.amp.custom_fwd
+except AttributeError:
+    def custom_fwd(**kwargs):
+        return lambda x : x
+try:
+    custom_bwd = torch.amp.custom_bwd
+except AttributeError:
+    def custom_bwd(**kwargs):
+        return lambda x : x
