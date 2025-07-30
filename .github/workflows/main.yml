@@ -8,8 +8,11 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.8"]
+        python-version: ["3.8", "3.x"]
         pytorch-version: ["torch==1.6.0", "torch"]
+        exclude:
+          - python-version: "3.x"
+            pytorch-version: "torch==1.6.0"
 
     steps:
       - name: Set up Python
