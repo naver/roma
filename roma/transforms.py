@@ -283,24 +283,15 @@ class _BaseAffine:
         return type(self)(self.linear.clone(), self.translation.clone())
     
 
-    def to_homogeneous(self, output=None):
+    def to_homogeneous(self):
         r"""
-        Args:
-            output (...x(D+1)x(C+1) tensor or None): optional tensor in which to store the result.
-
         Returns:
             A ...x(D+1)x(C+1) tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
         batch_shape, D, C = self.linear.shape[:-2], self.linear.shape[-2], self.linear.shape[-1]
         output_shape = batch_shape + (D+1,C+1)
-        if output is None:
-            output = torch.empty(output_shape, device=self.translation.device, dtype=self.translation.dtype)
-        else:
-            assert output.shape == output_shape
-        output[...,:D,:C] = self.linear
-        output[...,:D,C] = self.translation
-        output[...,D,:C] = 0.0
-        output[...,D,C] = 1.0
+        output = torch.concatenate((torch.concatenate((self.linear, self.translation[...,None]), dim=-1),
+                    torch.concatenate((torch.zeros(batch_shape + (1,C), device=self.translation.device, dtype=self.translation.dtype), torch.ones(batch_shape + (1,1), device=self.translation.device, dtype=self.translation.dtype)), dim=-1)), dim=-2)
         return output
 
     @classmethod
@@ -353,7 +344,7 @@ class Isometry(Affine, Orthonormal):
             if len(batch_dims) == 0:
                 linear = torch.eye(D, dtype=translation.dtype, device=translation.device)
             else:
-                linear = torch.eye(D, dtype=translation.dtype, device=translation.device)[[None] * len(batch_dims)].expand(batch_dims + (-1,-1))
+                linear = torch.eye(D, dtype=translation.dtype, device=translation.device)[tuple([None] * len(batch_dims))].expand(batch_dims + (-1,-1))
         else:
             assert linear.shape[-1] == linear.shape[-2], "Expecting same dimensions for input and output."
         Affine.__init__(self, linear, translation)

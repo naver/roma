@@ -240,6 +240,10 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.5.5:
+    - Replaced most empty tensor initializations followed by indexing assignments by direct tensor constructions for better vmap compatibility.
+    - Removed support for re-using existing buffers in :meth:`~roma.transforms.Affine.to_homogeneous()`.
+    - Rewrote rotvec/unitquat conversion routines for small angles.
 Version 1.5.4:
     - Cast inputs of :func:`~roma.mappings.procrustes()` to float32 when using autocast.
 Version 1.5.3:

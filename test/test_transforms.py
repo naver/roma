@@ -152,10 +152,6 @@ class TestTransforms(unittest.TestCase):
                 self.assertTrue(torch.all(transformation.linear == transformation2.linear))
                 self.assertTrue(torch.all(transformation.translation == transformation2.translation))
 
-                # Re-use of an existing buffer
-                homogeneous_bis = transformation.to_homogeneous(homogeneous)
-                self.assertTrue(homogeneous_bis is homogeneous)
-
     def test_unitquat_homogeneous_cast(self):
         batch_shape = (10,)
         D = 3
@@ -260,7 +256,7 @@ class TestTransforms(unittest.TestCase):
                 Tx = T.apply(x)
                 homogeneous = T.to_homogeneous()
                 homogeneous2 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous()
-                homogeneous3 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous(torch.zeros_like(homogeneous))
+                homogeneous3 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous()
                 self.assertTrue(homogeneous.shape == batch_shape + (C+1, D+1))
                 self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous2)))
                 self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous3)))
@@ -292,7 +288,7 @@ class TestTransforms(unittest.TestCase):
 
         # Translation-only transformation
         translation = torch.randn(batch_shape + (D,), dtype=dtype)
-        identity = torch.eye(D, dtype=dtype)[[None] * len(batch_shape)].repeat(batch_shape + (1,1))
+        identity = torch.eye(D, dtype=dtype)[tuple([None] * len(batch_shape))].repeat(batch_shape + (1,1))
         T = roma.Rigid(identity, translation)
         T1 = roma.Rigid(None, translation)
         delta = T1 @ T.inverse()

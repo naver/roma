@@ -203,14 +203,37 @@ def symmatrixvec_to_unitquat(x):
     """
     x, batch_shape = roma.internal.flatten_batch_dims(x, end_dim=-2)
     batch_size, D = x.shape
-    assert(D) == 10, "Input should be a Bx10 tensor."
-    A = torch.empty((batch_size, 4, 4), dtype=x.dtype, device=x.device)
-    # Fill only the lower triangular part of the matrix.
-    A[:, :,0] = x[:,0:4]
-    A[:,1:,1] = x[:,4:7]
-    A[:,2:,2] = x[:,7:9]
-    A[:, 3,3] = x[:,9]
+    assert(D) == 10, "Input should be a Bx10 tensor."    
+    x00, x10, x20, x30, x11, x21, x31, x22, x32, x33 = x.unbind(dim=-1)
+    A = torch.stack((x00, x10, x20, x30,
+                    x10, x11, x21, x31,
+                    x20, x21, x22, x32,
+                    x30, x31, x32, x33), dim=-1).reshape(-1,4,4)
     return roma.internal.unflatten_batch_dims(symmatrix_to_projective_point(A), batch_shape)    
+
+def sinc(x, threshold=1e-3):
+    r"""
+    sinc function :math:`\mathrm{sinc}(x) = \sin(x) / x`.
+
+    Args:
+        x (... tensor): input values.
+    Returns:
+        batch of sinc values (... tensor).
+    """
+    mask = torch.abs(x) < threshold
+    return torch.where(mask, 1 - x**2 / 6 + x**4 / 120, torch.sin(x) / x.clamp_min(threshold))
+
+def inv_sinc(x, threshold=1e-3):
+    r"""
+    Inverse of the sinc function :math:`\mathrm{inv\_sinc}(x) = x / \sin(x)`.
+
+    Args:
+        x (... tensor): input values.
+    Returns:
+        batch of inv_sinc values (... tensor).
+    """
+    mask = torch.abs(x) < threshold
+    return torch.where(mask, 1 + x**2 / 6 + 7 * x**4 / 360, x / torch.sin(x).clamp_min(threshold))
 
 def rotvec_to_unitquat(rotvec):
     r"""
@@ -222,25 +245,15 @@ def rotvec_to_unitquat(rotvec):
         batch of unit quaternions (...x4 tensor, XYZW convention).
     """
     rotvec, batch_shape = roma.internal.flatten_batch_dims(rotvec, end_dim=-2)
-    num_rotations, D = rotvec.shape
+    _, D = rotvec.shape
     assert D == 3, "Input should be a Bx3 tensor."
 
     # Adapted from SciPy:
     # https://github.com/scipy/scipy/blob/adc4f4f7bab120ccfab9383aba272954a0a12fb0/scipy/spatial/transform/rotation.py#L621
     
     norms = torch.norm(rotvec, dim=-1)
-    small_angle = (norms <= 1e-3)
-    large_angle = ~small_angle
-
-    scale = torch.empty((num_rotations,), device=rotvec.device, dtype=rotvec.dtype)
-    scale[small_angle] = (0.5 - norms[small_angle] ** 2 / 48 +
-                          norms[small_angle] ** 4 / 3840)
-    scale[large_angle] = (torch.sin(norms[large_angle] / 2) /
-                          norms[large_angle])
-
-    quat = torch.empty((num_rotations, 4), device=rotvec.device, dtype=rotvec.dtype)
-    quat[:, :3] = scale[:, None] * rotvec
-    quat[:, 3] = torch.cos(norms / 2)
+    scale = sinc(norms / 2, 1e-3) / 2.
+    quat = torch.concatenate((scale[:, None] * rotvec, torch.cos(norms / 2)[:, None]), dim=-1)
     return roma.internal.unflatten_batch_dims(quat, batch_shape)
 
 def unitquat_to_rotvec(quat, shortest_arc=True):
@@ -272,17 +285,7 @@ def unitquat_to_rotvec(quat, shortest_arc=True):
         # (Otherwise angle can be arbitrary within ]-2pi, 2pi]).
         quat[quat[:, 3] < 0] *= -1
     half_angle = torch.atan2(torch.norm(quat[:, :3], dim=1), quat[:, 3])
-    angle = 2 * half_angle
-    small_angle = (torch.abs(angle) <= 1e-3)
-    large_angle = ~small_angle
-
-    num_rotations = len(quat)
-    scale = torch.empty(num_rotations, dtype=quat.dtype, device=quat.device)
-    scale[small_angle] = (2 + angle[small_angle] ** 2 / 12 +
-                          7 * angle[small_angle] ** 4 / 2880)
-    scale[large_angle] = (angle[large_angle] /
-                          torch.sin(half_angle[large_angle]))
-
+    scale = 2. * inv_sinc(half_angle, 1e-3)
     rotvec = scale[:, None] * quat[:, :3]
     return roma.internal.unflatten_batch_dims(rotvec, batch_shape)
 
@@ -315,20 +318,9 @@ def unitquat_to_rotmat(quat):
     yz = y * z
     xw = x * w
 
-    matrix = torch.empty(quat.shape[:-1] + (3, 3), dtype=quat.dtype, device=quat.device)
-
-    matrix[..., 0, 0] = x2 - y2 - z2 + w2
-    matrix[..., 1, 0] = 2 * (xy + zw)
-    matrix[..., 2, 0] = 2 * (xz - yw)
-
-    matrix[..., 0, 1] = 2 * (xy - zw)
-    matrix[..., 1, 1] = - x2 + y2 - z2 + w2
-    matrix[..., 2, 1] = 2 * (yz + xw)
-
-    matrix[..., 0, 2] = 2 * (xz + yw)
-    matrix[..., 1, 2] = 2 * (yz - xw)
-    matrix[..., 2, 2] = - x2 - y2 + z2 + w2
-    return matrix
+    return torch.stack((x2 - y2 - z2 + w2, 2 * (xy - zw), 2 * (xz + yw),
+                    2 * (xy + zw), - x2 + y2 - z2 + w2, 2 * (yz - xw),
+                    2 * (xz - yw), 2 * (yz + xw), - x2 - y2 + z2 + w2), dim=-1).reshape(quat.shape[:-1] + (3, 3))
 
 def rotmat_to_unitquat(R):
     r"""

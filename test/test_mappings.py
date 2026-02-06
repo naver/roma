@@ -88,28 +88,34 @@ class TestMappings(unittest.TestCase):
     def test_unitquat_to_rotvec(self):
         torch.manual_seed(666)
         batch_size = 100
-        for dtype in (torch.float32, torch.float64):
-            q = roma.random_unitquat(batch_size, dtype)
-            xp = roma.unitquat_to_rotvec(q, shortest_arc=True)
-            xm = roma.unitquat_to_rotvec(-q, shortest_arc=True)
-            self.assertEqual(xp.shape, (batch_size, 3))
-            self.assertTrue(is_close(xp, xm))
-            self.assertTrue(torch.all(torch.norm(xp, dim=-1) <= np.pi))
+        for dtype in (torch.float64, torch.float32):
+            for small_angle in (True, False):
+                if small_angle:
+                    q = torch.randn((batch_size, 4), dtype=dtype, device=device)
+                    q[...,3] = 1000
+                    q = q / torch.norm(q, dim=-1, keepdim=True)
+                else:
+                    q = roma.random_unitquat(batch_size, dtype=dtype, device=device)
+                xp = roma.unitquat_to_rotvec(q, shortest_arc=True)
+                xm = roma.unitquat_to_rotvec(-q, shortest_arc=True)
+                self.assertEqual(xp.shape, (batch_size, 3))
+                self.assertTrue(is_close(xp, xm))
+                self.assertTrue(torch.all(torch.norm(xp, dim=-1) <= np.pi))
 
-            # Mappings from q and -q should give different results in general when shortest_arc==False
-            xpn = roma.unitquat_to_rotvec(q, shortest_arc=False)
-            xmn = roma.unitquat_to_rotvec(-q, shortest_arc=False)
-            self.assertFalse(any([is_close(xpn[i], xmn[i]) for i in range(batch_size)]))
+                # Mappings from q and -q should give different results in general when shortest_arc==False
+                xpn = roma.unitquat_to_rotvec(q, shortest_arc=False)
+                xmn = roma.unitquat_to_rotvec(-q, shortest_arc=False)
+                self.assertFalse(any([is_close(xpn[i], xmn[i]) for i in range(batch_size)]))
 
-            # However, the result should be similar when shortest_arc==True
-            xpn = roma.unitquat_to_rotvec(q, shortest_arc=True)
-            xmn = roma.unitquat_to_rotvec(-q, shortest_arc=True)
-            self.assertTrue(is_close(xpn, xmn))
+                # However, the result should be similar when shortest_arc==True
+                xpn = roma.unitquat_to_rotvec(q, shortest_arc=True)
+                xmn = roma.unitquat_to_rotvec(-q, shortest_arc=True)
+                self.assertTrue(is_close(xpn, xmn))
 
-            # Ensure cyclic consistency of the mappings in any case
-            for x in xp, xm, xpn, xmn:
-                qbis = roma.rotvec_to_unitquat(x)
-                self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 5e-6))
+                # Ensure cyclic consistency of the mappings in any case
+                for x in xp, xm, xpn, xmn:
+                    qbis = roma.rotvec_to_unitquat(x)
+                    self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 5e-6))
 
     def test_rotvec_rotmat(self):
         torch.manual_seed(666)
