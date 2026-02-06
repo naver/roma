@@ -253,7 +253,7 @@ def rotvec_to_unitquat(rotvec):
     
     norms = torch.norm(rotvec, dim=-1)
     scale = sinc(norms / 2, 1e-3) / 2.
-    quat = torch.concatenate((scale[:, None] * rotvec, torch.cos(norms / 2)[:, None]), dim=-1)
+    quat = torch.cat((scale[:, None] * rotvec, torch.cos(norms / 2)[:, None]), dim=-1)
     return roma.internal.unflatten_batch_dims(quat, batch_shape)
 
 def unitquat_to_rotvec(quat, shortest_arc=True):

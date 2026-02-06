@@ -290,8 +290,8 @@ class _BaseAffine:
         """
         batch_shape, D, C = self.linear.shape[:-2], self.linear.shape[-2], self.linear.shape[-1]
         output_shape = batch_shape + (D+1,C+1)
-        output = torch.concatenate((torch.concatenate((self.linear, self.translation[...,None]), dim=-1),
-                    torch.concatenate((torch.zeros(batch_shape + (1,C), device=self.translation.device, dtype=self.translation.dtype), torch.ones(batch_shape + (1,1), device=self.translation.device, dtype=self.translation.dtype)), dim=-1)), dim=-2)
+        output = torch.cat((torch.cat((self.linear, self.translation[...,None]), dim=-1),
+                    torch.cat((torch.zeros(batch_shape + (1,C), device=self.translation.device, dtype=self.translation.dtype), torch.ones(batch_shape + (1,1), device=self.translation.device, dtype=self.translation.dtype)), dim=-1)), dim=-2)
         return output
 
     @classmethod
