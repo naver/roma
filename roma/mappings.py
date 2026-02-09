@@ -283,7 +283,8 @@ def unitquat_to_rotvec(quat, shortest_arc=True):
     if shortest_arc:
         # Enforce w > 0 to ensure 0 <= angle <= pi.
         # (Otherwise angle can be arbitrary within ]-2pi, 2pi]).
-        quat[quat[:, 3] < 0] *= -1
+        sign = torch.where(quat[:, 3:4] < 0, -1.0, 1.0)
+        quat = quat * sign
     half_angle = torch.atan2(torch.norm(quat[:, :3], dim=1), quat[:, 3])
     scale = 2. * inv_sinc(half_angle, 1e-3)
     rotvec = scale[:, None] * quat[:, :3]
