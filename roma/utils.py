@@ -5,6 +5,8 @@ r"""
 Various utility functions related to rotation representations.
 """
 
+import math
+
 import torch
 import numpy as np
 import roma.internal
@@ -134,7 +136,7 @@ def rotmat_cosine_angle(R):
     assert R.shape[-2:] == (3,3), "Expecting a ...x3x3 batch of rotation matrices"
     return  0.5 * (R[...,0,0] + R[...,1,1] + R[...,2,2] - 1.0)
 
-_ONE_OVER_2SQRT2 = 1.0 / (2 * np.sqrt(2))
+_ONE_OVER_2SQRT2 = 1.0 / (2 * math.sqrt(2))
 def rotmat_geodesic_distance(R1, R2, clamping=1.0):
     r"""
     Returns the angular distance alpha between a pair of rotation matrices.
