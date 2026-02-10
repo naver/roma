@@ -54,6 +54,9 @@ def random_unitquat(size = tuple(), dtype=torch.float, device=None, generator=No
 
     Args:
         size (tuple or int): batch size. Use for example ``tuple()`` to generate a single element, and ``(5,2)`` to generate a 5x2 batch.
+        dtype (torch.dtype): data type of the returned tensor.
+        device: device of the returned tensor.
+        generator: random number generator for sampling. Use for example ``torch.Generator(device='cuda')``.
     Returns:
         batch of unit quaternions (size x 4 tensor).
 
@@ -77,6 +80,9 @@ def random_rotmat(size  = tuple(), dtype=torch.float, device=None, generator=Non
 
     Args:
         size (tuple or int): batch size. Use for example ``tuple()`` to generate a single element, and ``(5,2)`` to generate a 5x2 batch.
+        dtype (torch.dtype): data type of the returned tensor.
+        device: device of the returned tensor.
+        generator: random number generator for sampling. Use for example ``torch.Generator(device='cuda
     Returns:
         batch of rotation matrices (size x 3x3 tensor).
     """

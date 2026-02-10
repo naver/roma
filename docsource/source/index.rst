@@ -240,6 +240,9 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.5.6:
+    - Optional generator argument for random sampling functions.
+    - Changes for better graph tracing and vmap compatibility.
 Version 1.5.5:
     - Replaced most empty tensor initializations followed by indexing assignments by direct tensor constructions for better vmap compatibility.
     - Removed support for re-using existing buffers in :meth:`~roma.transforms.Affine.to_homogeneous()`.
