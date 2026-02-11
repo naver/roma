@@ -6,7 +6,7 @@ Various utility functions related to rotation representations.
 """
 
 import torch
-import numpy as np
+import math
 import roma.internal
 import roma.mappings
 
@@ -68,8 +68,8 @@ def random_unitquat(size = tuple(), dtype=torch.float, device=None, generator=No
         size = (size,)
 
     x0 = torch.rand(size, dtype=dtype, device=device, generator=generator)
-    theta1 = (2.0 * np.pi) * torch.rand(size, dtype=dtype, device=device)
-    theta2 = (2.0 * np.pi) * torch.rand(size, dtype=dtype, device=device)
+    theta1 = (2.0 * math.pi) * torch.rand(size, dtype=dtype, device=device)
+    theta2 = (2.0 * math.pi) * torch.rand(size, dtype=dtype, device=device)
     r1 = torch.sqrt(1.0 - x0)
     r2 = torch.sqrt(x0)
     return torch.stack((r1 * torch.sin(theta1), r1 * torch.cos(theta1), r2 * torch.sin(theta2), r2 * torch.cos(theta2)), dim=-1)
@@ -134,7 +134,7 @@ def rotmat_cosine_angle(R):
     assert R.shape[-2:] == (3,3), "Expecting a ...x3x3 batch of rotation matrices"
     return  0.5 * (R[...,0,0] + R[...,1,1] + R[...,2,2] - 1.0)
 
-_ONE_OVER_2SQRT2 = 1.0 / (2 * np.sqrt(2))
+_ONE_OVER_2SQRT2 = 1.0 / (2 * math.sqrt(2))
 def rotmat_geodesic_distance(R1, R2, clamping=1.0):
     r"""
     Returns the angular distance alpha between a pair of rotation matrices.

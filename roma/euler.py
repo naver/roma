@@ -3,7 +3,7 @@
 # 3-Clause BSD License.
 import torch
 import roma
-import numpy as np
+import math
 import roma.internal
 
 def _elementary_basis_index(axis):
@@ -119,8 +119,8 @@ def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, eps
     # Reference: https://github.com/scipy/scipy/blob/ac6bcaf00411286271f7cc21e495192c73168ae4/scipy/spatial/transform/_rotation.pyx#L325C12-L325C15
     assert len(convention) == 3
 
-    pi = np.pi
-    lamb = np.pi/2
+    pi = math.pi
+    lamb = math.pi/2
 
     extrinsic = convention.islower()
     if not extrinsic:
