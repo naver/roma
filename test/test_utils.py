@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import roma
 import roma.internal
+from roma import utils
 from test.utils import is_close
 
 class TestUtils(unittest.TestCase):
@@ -61,6 +62,31 @@ class TestUtils(unittest.TestCase):
             rotvec2 = roma.unitquat_to_rotvec(q2)
             alpha_rotvec = roma.rotvec_geodesic_distance(rotvec1, rotvec2)
             self.assertTrue(is_close(alpha_rotvec, alpha_q))
+
+    def test_rotmat_geodesic_distance_atan2(self):
+        # The rotmat_geodesic_distance_pi_stable also passes this test,
+        # but _rotmat_geodesic_distance_atan2 is its internal helper function
+        # which has the strongest preciseness guarantess.
+
+        # This test also passes with atol=1e-6 with all possible eps_end.
+        # roma.rotmat_geodesic_distance notably does not pass this test,
+        # as it stops working at eps_end=1e-2 for atol=1e-5.
+
+        batch_size = 100
+        eps_end = 1e-5
+        eps_start = eps_end * 10
+        atol = 1e-5
+
+        for dtype in (torch.float32, torch.float64):
+            axis = torch.nn.functional.normalize(torch.randn((batch_size,3), dtype=dtype), dim=-1)
+            alpha = torch.linspace(np.pi - eps_start, np.pi - eps_end, batch_size, dtype=dtype)
+            x = alpha[:,None] * axis
+            R = roma.rotvec_to_rotmat(x)
+            I = torch.eye(3, dtype=dtype)
+
+            geo_dist = roma.utils._rotmat_geodesic_distance_atan2(R, I[None,:,:])
+            self.assertTrue(torch.all(torch.abs(geo_dist - alpha) < atol),
+                            msg=f"rotmat_geodesic_distance_pi_stable failed near pi")
 
     def test_identity_quat(self):
         q = roma.identity_quat()

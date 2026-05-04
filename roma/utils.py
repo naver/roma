@@ -164,6 +164,82 @@ def rotmat_geodesic_distance_naive(R1, R2):
     cos = rotmat_cosine_angle(R)
     return torch.acos(torch.clamp(cos, -1.0, 1.0))
 
+def _rotmat_geodesic_distance_atan2(R1, R2):
+    r"""
+    Returns the angular distance alpha between a pair of rotation matrices.
+    Based on the equalities :math:`\alpha=atan2(sin(\alpha), cos(\alpha))`,
+    :math:`sin(\alpha)=\frac{1}{2}|(R_{21}-R_{12}, R_{02}-R_{20}, R_{10}-R_{01})|_2` and :math:`cos(\alpha)=\frac{1}{2}(Trace(R)-1)`.
+
+    More precise than :func:`~roma.utils.rotmat_geodesic_distance` at :math:`\alpha=\pi`, while still precise for nearby rotations (:math:`\alpha=0`).
+
+    .. warning::
+    This function is significantly slower than :func:`~roma.utils.rotmat_geodesic_distance`
+    (approximately 3x slower on CUDA and 10x slower on CPU in this implementation, which is optimized for CUDA).
+    To remedy this, the function :func:`~roma.utils.rotmat_geodesic_distance_pi_stable` is preferred in most cases,
+    because it first calculates :math:`\alpha` using :func:`~roma.utils.rotmat_geodesic_distance` and then recalculates
+    :math:`\alpha` using this function if :math:`\alpha` is too close to :math:`\pi`.
+
+    Args:
+        R1, R2 (...x3x3 tensor): batch of 3x3 rotation matrices.
+    Returns:
+        batch of angles in radians (... tensor).
+    """
+
+    # Equivalent to R = R2 @ R1.transpose(-1, -2), but faster when using CUDA.
+    # For a more CPU-friendly method, use R = R2 @ R1.transpose(-1, -2) instead.
+    r00 = (R2[..., 0, :] * R1[..., 0, :]).sum(dim=-1)
+    r11 = (R2[..., 1, :] * R1[..., 1, :]).sum(dim=-1)
+    r22 = (R2[..., 2, :] * R1[..., 2, :]).sum(dim=-1)
+    r21 = (R2[..., 2, :] * R1[..., 1, :]).sum(dim=-1)
+    r12 = (R2[..., 1, :] * R1[..., 2, :]).sum(dim=-1)
+    r02 = (R2[..., 0, :] * R1[..., 2, :]).sum(dim=-1)
+    r20 = (R2[..., 2, :] * R1[..., 0, :]).sum(dim=-1)
+    r10 = (R2[..., 1, :] * R1[..., 0, :]).sum(dim=-1)
+    r01 = (R2[..., 0, :] * R1[..., 1, :]).sum(dim=-1)
+
+    x = r21 - r12
+    y = r02 - r20
+    z = r10 - r01
+
+    sin = torch.sqrt(x * x + y * y + z * z)
+    cos = r00 + r11 + r22 - 1.0
+
+    return torch.atan2(sin, cos)
+
+def rotmat_geodesic_distance_pi_stable(R1, R2, tol=1e-2):
+    r"""
+    Returns the angular distance alpha between a pair of rotation matrices.
+    Based on the equalities :math:`\alpha=atan2(sin(\alpha), cos(\alpha))`,
+    :math:`sin(\alpha)=\frac{1}{2}|(R_{21}-R_{12}, R_{02}-R_{20}, R_{10}-R_{01})|_2` and :math:`cos(\alpha)=\frac{1}{2}(Trace(R)-1)`.
+
+    More precise than :func:`~roma.utils.rotmat_geodesic_distance` at :math:`\alpha=\pi`, while still precise for nearby rotations where :math:`\alpha=0`.
+
+    For performance reasons, this method first calls :func:`~roma.utils.rotmat_geodesic_distance`. If the resulting :math:`\alpha` is too close
+    to :math:`\alpha=\pi` given the tolerance tol, i.e. if :math:`\alpha \in (\pi-tol, \pi+tol)`, it recalculates the value of :math:`\alpha`
+    using a more precise, but slower, method using :math:`\alpha=atan2(sin(\alpha), cos(\alpha))`.
+    Therefore, for almost all :math:`\alpha` this function produces the same result as :func:`~roma.utils.rotmat_geodesic_distance`
+    with only a minimal overhead cost in runtime performance. However, for :math:`\alpha` near :math:`\pi`, this function produces
+    more precise results, but it is approximately 3x slower using CUDA tensors and 10x slower using CPU tensors
+    for these :math:`\alpha`.
+
+    Args:
+        R1, R2 (...x3x3 tensor): batch of 3x3 rotation matrices.
+    Returns:
+        batch of angles in radians (... tensor).
+    """
+    alpha = rotmat_geodesic_distance(R1, R2)
+
+    mask = (alpha > math.pi - tol) & (alpha < math.pi + tol)
+
+    if not mask.any().item():
+        return alpha
+
+    if mask.all().item():
+        return _rotmat_geodesic_distance_atan2(R1, R2)
+
+    alpha = alpha.clone()
+    alpha[mask] = _rotmat_geodesic_distance_atan2(R1[mask], R2[mask])
+    return alpha
 
 def unitquat_geodesic_distance(q1, q2):
     r"""

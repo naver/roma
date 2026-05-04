@@ -175,6 +175,10 @@ Care for numerical precision
     Backward pass through :func:`~roma.utils.rotmat_geodesic_distance_naive` leads to unstable gradient estimations and produces *Not-a-Number* values for small angles,
     whereas :func:`~roma.utils.rotmat_geodesic_distance_naive` is well-behaved, and returns *Not-a-Number* only for 0.0 angle where gradient is mathematically undefined.
 
+    However, both :func:`~roma.utils.rotmat_geodesic_distance_naive` and :func:`~roma.utils.rotmat_geodesic_distance` have low numerical precision around :math:`\theta=\pi`, in the same
+    way that :func:`~roma.utils.rotmat_geodesic_distance_naive` is unprecise around :math:`\theta=0`. For this reason, we also provide the function :func:`~roma.utils.rotmat_geodesic_distance_pi_stable`
+    which is numerically precise at :math:`\theta=\pi` too (i.e. precise for all :math:`\theta`), at the price of slower runtime performance around :math:`\theta=\pi`.
+
     .. image:: rotmat_geodesic_distance_zero.svg
     
     .. image:: rotmat_geodesic_distance_grads_zero.svg
