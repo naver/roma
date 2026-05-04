@@ -6,7 +6,6 @@ import torch
 import numpy as np
 import roma
 import roma.internal
-from roma import utils
 from test.utils import is_close
 
 class TestUtils(unittest.TestCase):
@@ -26,26 +25,31 @@ class TestUtils(unittest.TestCase):
             alpha = (np.pi - 1e-5) * 2 * (torch.rand(batch_size, dtype=dtype)-0.5)
             x = alpha[:,None] * axis
             R = roma.rotvec_to_rotmat(x)
-            
+
             cosine = roma.rotmat_cosine_angle(R)
             self.assertTrue(is_close(cosine, torch.cos(alpha)))
-            
+
             I = torch.eye(3, dtype=dtype)
             M = roma.random_rotmat(batch_size, dtype=dtype)
-            
-            geo_dist = roma.rotmat_geodesic_distance(R, I[None,:,:])
-            self.assertTrue(is_close(torch.abs(alpha), geo_dist))
-            
-            # Left-invariance of the metric
-            geo_dist_bis = roma.rotmat_geodesic_distance(M @ R, M @ I[None,:,:])
-            self.assertTrue(is_close(geo_dist_bis, geo_dist))
-            
-            # Right-invariance of the metric
-            geo_dist_ter = roma.rotmat_geodesic_distance(R @ M, I[None,:,:] @ M)
-            self.assertTrue(is_close(geo_dist_ter, geo_dist))
-            
-            geo_dist_naive = roma.rotmat_geodesic_distance_naive(M @ R, M @ I[None,:,:])
-            self.assertTrue(is_close(torch.abs(alpha), geo_dist_naive))
+
+            for geodesic_distance_function in [roma.rotmat_geodesic_distance,
+                                               roma.rotmat_geodesic_distance_naive,
+                                               roma.rotmat_geodesic_distance_pi_stable,
+                                               roma.utils._rotmat_geodesic_distance_atan2]:
+
+                geo_dist = geodesic_distance_function(R, I[None,:,:])
+                self.assertTrue(is_close(torch.abs(alpha), geo_dist),
+                                msg=f"{geodesic_distance_function.__name__} failed geodesic distance function")
+
+                # Left-invariance of the metric
+                geo_dist_bis = geodesic_distance_function(M @ R, M @ I[None,:,:])
+                self.assertTrue(is_close(geo_dist_bis, geo_dist),
+                                msg=f"{geodesic_distance_function.__name__} failed left-invariance for the geodesic distance function")
+
+                # Right-invariance of the metric
+                geo_dist_ter = geodesic_distance_function(R @ M, I[None,:,:] @ M)
+                self.assertTrue(is_close(geo_dist_ter, geo_dist),
+                                msg=f"{geodesic_distance_function.__name__} failed right-invariance for the geodesic distance function")
 
     def test_other_geodesic_distance(self):
         batch_size = 100
