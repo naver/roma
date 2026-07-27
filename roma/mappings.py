@@ -21,16 +21,14 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
         if force_rotation:
             # We flip the smallest singular value to ensure getting a rotation matrix
             with torch.no_grad():
-                flip = (torch.det(U) * torch.det(V) < 0)            
-            # in-place modifications of variables not used afterwards.
-            DS = D
-            DS[flip,-1] *= -1
+                flip = (torch.det(U) * torch.det(V) < 0)
+                flip_matrix = torch.ones(*M.shape[:2], dtype=M.dtype, device=M.device)
+                flip_matrix[:,-1] = 1. - 2. * flip.to(U.dtype)
+            DS = D * flip_matrix
             del D
-            US = U
-            US[flip,:,-1] *= -1
+            US = U * flip_matrix[:,None,:]
             del U
         else:
-            flip = None
             DS = D
             US = U
         R = US @ V.transpose(-1, -2)
@@ -57,10 +55,10 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
         
         grad_M = torch.einsum('bnm, bnk, bklij, bml -> bij', grad_R, US, Omega_klij, V)
         # Gradient contribution from singular values
-        grad_M += (US * grad_DS[:,None,:]) @ V.transpose(-1, -2)
+        grad_M = grad_M + (US * grad_DS[:,None,:]) @ V.transpose(-1, -2)
         if ctx.regularization != 0.0:
             # Add a regularization term in the direction of the orthonormalized output.
-            grad_M += ctx.regularization * (M - R)
+            grad_M = grad_M + ctx.regularization * (M - R)
         return grad_M, None, None, None
 
 def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, return_singular_values : bool = False):

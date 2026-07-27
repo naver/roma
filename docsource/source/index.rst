@@ -240,6 +240,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.5.7:
+    - Changes in ``roma.procrustes`` for better graph tracing support.
 Version 1.5.6:
     - Optional generator argument for random sampling functions.
     - Changes for better graph tracing and vmap compatibility.
