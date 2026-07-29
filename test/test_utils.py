@@ -25,26 +25,31 @@ class TestUtils(unittest.TestCase):
             alpha = (np.pi - 1e-5) * 2 * (torch.rand(batch_size, dtype=dtype)-0.5)
             x = alpha[:,None] * axis
             R = roma.rotvec_to_rotmat(x)
-            
+
             cosine = roma.rotmat_cosine_angle(R)
             self.assertTrue(is_close(cosine, torch.cos(alpha)))
-            
+
             I = torch.eye(3, dtype=dtype)
             M = roma.random_rotmat(batch_size, dtype=dtype)
-            
-            geo_dist = roma.rotmat_geodesic_distance(R, I[None,:,:])
-            self.assertTrue(is_close(torch.abs(alpha), geo_dist))
-            
-            # Left-invariance of the metric
-            geo_dist_bis = roma.rotmat_geodesic_distance(M @ R, M @ I[None,:,:])
-            self.assertTrue(is_close(geo_dist_bis, geo_dist))
-            
-            # Right-invariance of the metric
-            geo_dist_ter = roma.rotmat_geodesic_distance(R @ M, I[None,:,:] @ M)
-            self.assertTrue(is_close(geo_dist_ter, geo_dist))
-            
-            geo_dist_naive = roma.rotmat_geodesic_distance_naive(M @ R, M @ I[None,:,:])
-            self.assertTrue(is_close(torch.abs(alpha), geo_dist_naive))
+
+            for geodesic_distance_function in [roma.rotmat_geodesic_distance,
+                                               roma.rotmat_geodesic_distance_naive,
+                                               roma.rotmat_geodesic_distance_pi_stable,
+                                               roma.utils._rotmat_geodesic_distance_atan2]:
+
+                geo_dist = geodesic_distance_function(R, I[None,:,:])
+                self.assertTrue(is_close(torch.abs(alpha), geo_dist),
+                                msg=f"{geodesic_distance_function.__name__} failed geodesic distance function")
+
+                # Left-invariance of the metric
+                geo_dist_bis = geodesic_distance_function(M @ R, M @ I[None,:,:])
+                self.assertTrue(is_close(geo_dist_bis, geo_dist),
+                                msg=f"{geodesic_distance_function.__name__} failed left-invariance for the geodesic distance function")
+
+                # Right-invariance of the metric
+                geo_dist_ter = geodesic_distance_function(R @ M, I[None,:,:] @ M)
+                self.assertTrue(is_close(geo_dist_ter, geo_dist),
+                                msg=f"{geodesic_distance_function.__name__} failed right-invariance for the geodesic distance function")
 
     def test_other_geodesic_distance(self):
         batch_size = 100
@@ -61,6 +66,31 @@ class TestUtils(unittest.TestCase):
             rotvec2 = roma.unitquat_to_rotvec(q2)
             alpha_rotvec = roma.rotvec_geodesic_distance(rotvec1, rotvec2)
             self.assertTrue(is_close(alpha_rotvec, alpha_q))
+
+    def test_rotmat_geodesic_distance_atan2(self):
+        # The rotmat_geodesic_distance_pi_stable also passes this test,
+        # but _rotmat_geodesic_distance_atan2 is its internal helper function
+        # which has the strongest preciseness guarantess.
+
+        # This test also passes with atol=1e-6 with all possible eps_end.
+        # roma.rotmat_geodesic_distance notably does not pass this test,
+        # as it stops working at eps_end=1e-2 for atol=1e-5.
+
+        batch_size = 100
+        eps_end = 1e-5
+        eps_start = eps_end * 10
+        atol = 1e-5
+
+        for dtype in (torch.float32, torch.float64):
+            axis = torch.nn.functional.normalize(torch.randn((batch_size,3), dtype=dtype), dim=-1)
+            alpha = torch.linspace(np.pi - eps_start, np.pi - eps_end, batch_size, dtype=dtype)
+            x = alpha[:,None] * axis
+            R = roma.rotvec_to_rotmat(x)
+            I = torch.eye(3, dtype=dtype)
+
+            geo_dist = roma.utils._rotmat_geodesic_distance_atan2(R, I[None,:,:])
+            self.assertTrue(torch.all(torch.abs(geo_dist - alpha) < atol),
+                            msg=f"rotmat_geodesic_distance_pi_stable failed near pi")
 
     def test_identity_quat(self):
         q = roma.identity_quat()
