@@ -44,5 +44,6 @@ select = ["E4", "E7", "E9", "F"]
 ignore = ["E741"]  # I, O as math identifiers (identity matrix etc.) are idiomatic here
 
 [tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F403"]  # git-submodule shim re-exporting roma's star imports
 "roma/__init__.py" = ["F403"]  # star re-exports are the public API pattern
 "test/test_transforms.py" = ["F403", "F405"]

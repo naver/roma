@@ -302,8 +302,7 @@ class _BaseAffine:
         Returns:
             A ...x(D+1)x(C+1) tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
-        batch_shape, D, C = self.linear.shape[:-2], self.linear.shape[-2], self.linear.shape[-1]
-        output_shape = batch_shape + (D + 1, C + 1)
+        batch_shape, C = self.linear.shape[:-2], self.linear.shape[-1]
         output = torch.cat(
             (
                 torch.cat((self.linear, self.translation[..., None]), dim=-1),
@@ -467,7 +466,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         if output is None:
             output = torch.zeros(output_shape, device=self.translation.device, dtype=self.translation.dtype)
         else:
-            assert output_shape == output_shape
+            assert output.shape == output_shape
         output[..., :3, :3] = roma.unitquat_to_rotmat(self.linear)
         output[..., :3, 3] = self.translation
         # Set the homogeneous line

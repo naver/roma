@@ -40,7 +40,7 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
     Warning:
         Case is important: 'xyz' and 'XYZ' denote different conventions.
     """
-    if type(angles) == torch.Tensor:
+    if type(angles) is torch.Tensor:
         angles = [t.squeeze(dim=-1) for t in torch.split(angles, split_size_or_sections=1, dim=-1)]
 
     assert len(convention) == len(angles)

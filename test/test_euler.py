@@ -40,7 +40,7 @@ class TestEuler(unittest.TestCase):
                         self.assertTrue(all([angle.shape == batch_shape for angle in angles]))
                         if degrees:
                             self.assertTrue(
-                                all([torch.all(angle > -180.0) and torch.all(angle <= 180) for angle in angles])
+                                all([torch.all(angle > -180) and torch.all(angle <= 180) for angle in angles])
                             )
                         else:
                             self.assertTrue(
@@ -71,7 +71,7 @@ class TestEuler(unittest.TestCase):
                         self.assertTrue(all([angle.shape == batch_shape for angle in angles]))
                         if degrees:
                             self.assertTrue(
-                                all([torch.all(angle > -180.0) and torch.all(angle <= 180) for angle in angles])
+                                all([torch.all(angle > -180) and torch.all(angle <= 180) for angle in angles])
                             )
                         else:
                             self.assertTrue(
@@ -102,7 +102,7 @@ class TestEuler(unittest.TestCase):
                         self.assertTrue(all([angle.shape == batch_shape for angle in angles]))
                         if degrees:
                             self.assertTrue(
-                                all([torch.all(angle > -180.0) and torch.all(angle <= 180) for angle in angles])
+                                all([torch.all(angle > -180) and torch.all(angle <= 180) for angle in angles])
                             )
                         else:
                             self.assertTrue(
@@ -137,8 +137,8 @@ class TestEuler(unittest.TestCase):
         convention = "xyz"
         angles = roma.unitquat_to_euler(convention, q, as_tuple=True)
         angles_tensor = roma.unitquat_to_euler(convention, q)
-        assert type(angles) == tuple
-        assert type(angles_tensor) == torch.Tensor
+        assert type(angles) is tuple
+        assert type(angles_tensor) is torch.Tensor
         q1 = roma.euler_to_unitquat(convention, angles)
         q2 = roma.euler_to_unitquat(convention, angles_tensor)
         self.assertTrue(torch.all(roma.rotmat_geodesic_distance(q1, q2) < 1e-6))

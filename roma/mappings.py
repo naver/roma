@@ -250,7 +250,7 @@ def symmatrixvec_to_unitquat(x):
                     x20, x21, x22, x32,
                     x30, x31, x32, x33), dim=-1).reshape(-1,4,4)
     # fmt: on
-    return roma.internal.unflatten_batch_dims(symmatrix_to_projective_point(A), batch_shape)    
+    return roma.internal.unflatten_batch_dims(symmatrix_to_projective_point(A), batch_shape)
 
 
 def sinc(x, threshold=1e-3):
@@ -369,6 +369,7 @@ def unitquat_to_rotmat(quat):
                     2 * (xy + zw), - x2 + y2 - z2 + w2, 2 * (yz - xw),
                     2 * (xz - yw), 2 * (yz + xw), - x2 - y2 + z2 + w2), dim=-1).reshape(quat.shape[:-1] + (3, 3))
     # fmt: on
+
 
 def rotmat_to_unitquat(R):
     r"""

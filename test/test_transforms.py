@@ -13,7 +13,6 @@ class TestTransforms(unittest.TestCase):
         dtype = torch.float64
         x = torch.randn(batch_shape + (3,), dtype=dtype)
         R = roma.random_rotmat(batch_shape, dtype=dtype)
-        t = torch.randn(batch_shape + (3,), dtype=dtype)
 
         for transform in (Linear, Orthonormal, Rotation, RotationUnitQuat):
             if transform == RotationUnitQuat:
@@ -60,7 +59,7 @@ class TestTransforms(unittest.TestCase):
                 T1 = transform(R1)
                 T2 = transform(R2)
             T = T1 @ T2
-            self.assertTrue(type(T) == type(T1))
+            self.assertTrue(type(T) is type(T1))
 
             Tx = T.apply(x)
             Rx = T.linear_apply(x)
@@ -79,7 +78,7 @@ class TestTransforms(unittest.TestCase):
                 T1 = transform(R1, t1)
                 T2 = transform(R2, t2)
             T = T1 @ T2
-            self.assertTrue(type(T) == type(T1))
+            self.assertTrue(type(T) is type(T1))
 
             Tx = T.apply(x)
             Rx = T.linear_apply(x)
@@ -92,7 +91,6 @@ class TestTransforms(unittest.TestCase):
     def test_inverse(self):
         batch_shape = (10,)
         dtype = torch.float64
-        x = torch.randn(batch_shape + (3,), dtype=dtype)
         R = roma.random_rotmat(batch_shape, dtype=dtype)
         t = torch.randn(batch_shape + (3,), dtype=dtype)
 
@@ -138,7 +136,7 @@ class TestTransforms(unittest.TestCase):
         for D in range(2, 5):
             for Type in (Affine, Isometry, Rigid):
                 transformation = Type(torch.randn(batch_shape + (D, D)), torch.randn(batch_shape + (D,))).normalize()
-                self.assertTrue(type(transformation) == Type)
+                self.assertTrue(type(transformation) is Type)
 
                 homogeneous = transformation.to_homogeneous()
                 self.assertTrue(homogeneous.shape == batch_shape + (D + 1, D + 1))
@@ -148,7 +146,7 @@ class TestTransforms(unittest.TestCase):
                 self.assertTrue(torch.all(homogeneous[..., D, D] == 1))
 
                 transformation2 = Type.from_homogeneous(homogeneous)
-                self.assertTrue(type(transformation2) == Type)
+                self.assertTrue(type(transformation2) is Type)
                 self.assertTrue(torch.all(transformation.linear == transformation2.linear))
                 self.assertTrue(torch.all(transformation.translation == transformation2.translation))
 
@@ -160,7 +158,7 @@ class TestTransforms(unittest.TestCase):
         transformation = Type(
             torch.randn(batch_shape + (4,), dtype=dtype), torch.randn(batch_shape + (D,), dtype=dtype)
         ).normalize()
-        self.assertTrue(type(transformation) == Type)
+        self.assertTrue(type(transformation) is Type)
 
         homogeneous = transformation.to_homogeneous()
         self.assertTrue(homogeneous.shape == batch_shape + (D + 1, D + 1))
@@ -178,7 +176,7 @@ class TestTransforms(unittest.TestCase):
         self.assertTrue(torch.all(homogeneous[..., D, D] == 1))
 
         transformation2 = Type.from_homogeneous(homogeneous)
-        self.assertTrue(type(transformation2) == Type)
+        self.assertTrue(type(transformation2) is Type)
         self.assertTrue(
             torch.all(roma.unitquat_geodesic_distance(transformation.linear, transformation2.linear) < 1e-6)
         )
@@ -187,6 +185,9 @@ class TestTransforms(unittest.TestCase):
         # Re-use of an existing buffer
         homogeneous_bis = transformation.to_homogeneous(homogeneous)
         self.assertTrue(homogeneous_bis is homogeneous)
+        # A buffer of the wrong shape should be rejected
+        wrong_shape_buffer = torch.zeros(batch_shape + (D, D), dtype=dtype)
+        self.assertRaises(AssertionError, lambda: transformation.to_homogeneous(wrong_shape_buffer))
 
     def test_orthonormalization(self):
         batch_shape = (10, 4)
@@ -260,16 +261,17 @@ class TestTransforms(unittest.TestCase):
             for D in range(2, 5):
                 linear = torch.randn(batch_shape + (C, D), dtype=dtype)
                 translation = torch.randn(batch_shape + (C,), dtype=dtype)
-                roma.Linear(linear)
+                L = roma.Linear(linear)
                 x = torch.randn(batch_shape + (D,), dtype=dtype)
                 T = roma.Affine(linear, translation)
                 Tx = T.apply(x)
+                self.assertTrue(Tx.shape == batch_shape + (C,))
+                self.assertTrue(torch.all(torch.isclose(T.linear_apply(x), L.apply(x))))
+                self.assertTrue(torch.all(torch.isclose(Tx, L.apply(x) + translation)))
                 homogeneous = T.to_homogeneous()
                 homogeneous2 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous()
-                homogeneous3 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous()
                 self.assertTrue(homogeneous.shape == batch_shape + (C + 1, D + 1))
                 self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous2)))
-                self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous3)))
                 if C != D:
                     self.assertRaises(AssertionError, lambda: roma.Orthonormal(linear))
                     self.assertRaises(AssertionError, lambda: roma.Rotation(linear))

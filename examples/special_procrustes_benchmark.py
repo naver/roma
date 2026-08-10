@@ -50,9 +50,7 @@ torch.backends.cudnn.benchmark = True
 repeat = 20
 inner_repeat = 10
 
-batch_sizes = np.asarray(
-    np.logspace(start=0, stop=3, num=10, base=10, endpoint=True), dtype=np.int64
-)
+batch_sizes = np.asarray(np.logspace(start=0, stop=3, num=10, base=10, endpoint=True), dtype=np.int64)
 batch_durations = []
 batch_durations_basic = []
 means_basic = []

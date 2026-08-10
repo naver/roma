@@ -215,11 +215,7 @@ class TestUtils(unittest.TestCase):
     def test_slerp_consistency(self):
         # Test consistency between both slerp methods.
         for batch_shape in [(3,), (10, 20), (3, 14, 7)]:
-            for steps_shape in [
-                (6,),
-                (4, 2),
-                (3, 2, 1)
-            ]:
+            for steps_shape in [(6,), (4, 2), (3, 2, 1)]:
                 for shortest_arc in (True, False):
                     q0 = roma.random_unitquat(batch_shape)
                     q1 = roma.random_unitquat(batch_shape)

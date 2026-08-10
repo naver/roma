@@ -32,3 +32,25 @@ jobs:
       - name: Run unit tests.
         run: |
           python -m unittest
+
+  lint:
+    runs-on: ubuntu-latest
+    name: Ruff format & lint
+
+    steps:
+      - name: Prepare repo
+        uses: actions/checkout@master
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install ruff
+        run: pip install ruff==0.16.2
+
+      - name: Check formatting
+        run: ruff format --check roma test examples
+
+      - name: Lint
+        run: ruff check roma test examples

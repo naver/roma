@@ -68,7 +68,7 @@ def random_unitquat(size=tuple(), dtype=torch.float, device=None, generator=None
         K. Shoemake, “Uniform Random Rotations”, in Graphics Gems III (IBM Version), Elsevier, 1992, pp. 124–132. doi: 10.1016/B978-0-08-050755-2.50036-1.
 
     """
-    if type(size) == int:
+    if type(size) is int:
         size = (size,)
 
     x0 = torch.rand(size, dtype=dtype, device=device, generator=generator)
@@ -123,7 +123,7 @@ def identity_quat(size=tuple(), dtype=torch.float, device=None):
         All returned batch quaternions refer to the same memory location.
         Consider cloning the output tensor prior performing any in-place operations.
     """
-    if type(size) == int:
+    if type(size) is int:
         size = (size,)
     quat = torch.zeros(4, dtype=dtype, device=device)
     quat[..., -1] = 1.0
@@ -259,14 +259,6 @@ def quat_product(p, q):
     """
     # Adapted from SciPy:
     # https://github.com/scipy/scipy/blob/adc4f4f7bab120ccfab9383aba272954a0a12fb0/scipy/spatial/transform/rotation.py#L153
-    # batch_shape = p.shape[:-1]
-    # assert q.shape[:-1] == batch_shape, "Incompatible shapes"
-    # p = p.reshape(-1, 4)
-    # q = q.reshape(-1, 4)
-    # product = torch.empty_like(q)
-    # product[..., 3] = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
-    # product[..., :3] = (p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] +
-    #                   torch.cross(p[..., :3], q[..., :3], dim=-1))
 
     vector = p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] + torch.cross(p[..., :3], q[..., :3], dim=-1)
     last = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
