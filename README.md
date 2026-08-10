@@ -30,7 +30,7 @@ rotvec = torch.randn(batch_shape + (3,))
 q = roma.rotvec_to_unitquat(rotvec)
 R = roma.unitquat_to_rotmat(q)
 Rbis = roma.rotvec_to_rotmat(rotvec)
-euler_angles = roma.unitquat_to_euler('xyz', q, degrees=True)
+euler_angles = roma.unitquat_to_euler("xyz", q, degrees=True)
 
 # Regression of a rotation from an arbitrary input:
 # Special Procrustes orthonormalization of a 3x3 matrix
