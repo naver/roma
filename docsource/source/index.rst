@@ -33,11 +33,6 @@ Alternatively one can install the latest version of *RoMa* directly from the sou
 
     pip install git+https://github.com/naver/roma
 
-**With old pytorch versions (torch<1.8)**, we recommend installing `torch-batch-svd <https://github.com/KinglittleQ/torch-batch-svd>`_
-to achieve a significant speed-up with :func:`~roma.mappings.procrustes` on CUDA GPUs (see section :ref:`Why a new library?`).
-You can check that this module is properly loaded using the function :func:`~roma.utils.is_torch_batch_svd_available()`.
-**With recent pytorch installations (torch>=1.8), torch-batch-svd is no longer needed or used.**
-
 
 ..  contents::
         :depth: 3     
@@ -182,13 +177,6 @@ Care for numerical precision
 
 Computation efficiency
     *RoMa* favors code clarity, but aims to be reasonably efficient.
-
-    In particular, for Procrustes orthonormalization it can use on NVidia GPUs a batched SVD decomposition
-    that provides orders of magnitude speed-ups for large batch sizes compared to vanilla ``torch.svd()`` for PyTorch versions below 1.8.
-    The plot below was obtained for random 3x3 matrices, with PyTorch 1.7, a NVidia Tesla T4 GPU and CUDA 11.0.
-    *Note that recent versions of pytorch (>=1.8) integrate such speed up off-the-shelf.*
-
-    .. image:: special_procrustes_benchmark.svg
 
 Syntactic sugar
     *RoMa* aims to be easy-to-use with a simple syntax, and support for an arbitrary number of batch dimensions to let users focus on their applications.    

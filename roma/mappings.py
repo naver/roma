@@ -15,12 +15,13 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
     # Explicitely cast inputs to float32 for CPU and CUDA devices when using autocast,
     # as svd is not supported with bfloat16 and float16 on CPU and CUDA devices.
     @staticmethod
-    @roma.internal.custom_fwd(device_type="cpu", cast_inputs=torch.float32)
-    @roma.internal.custom_fwd(device_type="cuda", cast_inputs=torch.float32)
+    @torch.amp.custom_fwd(device_type="cpu", cast_inputs=torch.float32)
+    @torch.amp.custom_fwd(device_type="cuda", cast_inputs=torch.float32)
     def forward(M, force_rotation, regularization, gradient_eps):
         assert M.dim() == 3 and M.shape[1] == M.shape[2], "Input should be a BxDxD batch of matrices."
         # Singular values of D are sorted in descending order
-        U, D, V = roma.internal.svd(M)
+        U, D, Vt = torch.linalg.svd(M)
+        V = Vt.transpose(-2, -1)
         if force_rotation:
             # We flip the smallest singular value to ensure getting a rotation matrix
             with torch.no_grad():
@@ -145,18 +146,18 @@ def procrustes_naive(M, force_rotation: bool = False, return_singular_values: bo
     """
     M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
     assert M.dim() == 3 and M.shape[1] == M.shape[2], "Input should be a BxDxD batch of matrices."
-    U, D, V = roma.internal.svd(M)
+    U, D, Vt = torch.linalg.svd(M)
     # D is sorted in descending order
-    SVt = V.transpose(-1, -2)
     if force_rotation:
         # We flip the smallest singular value to ensure getting a rotation matrix
         with torch.no_grad():
-            flip = torch.det(U) * torch.det(V) < 0
-        if torch.is_grad_enabled():
-            # This is needed to avoid a runtime error "one of the variables needed for gradient computation has been modified by an inplace operation"
-            SVt = SVt.clone()
+            flip = torch.det(U) * torch.det(Vt) < 0
+        # This is needed to avoid a runtime error "one of the variables needed for gradient computation has been modified by an inplace operation"
+        SVt = Vt.clone() if torch.is_grad_enabled() else Vt
         SVt[flip, -1, :] *= -1
-    R = U @ SVt
+        R = U @ SVt
+    else:
+        R = U @ Vt
     R = roma.internal.unflatten_batch_dims(R, batch_shape)
     if not return_singular_values:
         return R
@@ -216,13 +217,13 @@ def symmatrix_to_projective_point(A):
     Warning:
         - This mapping is unstable when the smallest eigenvalue of A has a multiplicity strictly greater than 1.
         - The eigenvalue decomposition may fail, in particular when using single precision numbers.
-        - Current implementation is rather slow due to the implementation of ``torch.symeig``.
+        - Current implementation is rather slow due to the implementation of ``torch.linalg.eigh``.
           The CuSolver library provides a faster eigenvalue decomposition alternative, but results where found to be unreliable.
     """
     A, batch_shape = roma.internal.flatten_batch_dims(A, end_dim=-3)
     B, D1, D2 = A.shape
     assert (D1, D2) == (4, 4), "Input should be a symmetric Bx4x4 matrix."
-    eigenvalues, eigenvectors = roma.internal.symeig_lower(A)
+    eigenvalues, eigenvectors = torch.linalg.eigh(A, UPLO="L")
     # Eigenvalues are sorted in ascending order
     q = eigenvectors[:, :, 0]
     return roma.internal.unflatten_batch_dims(q, batch_shape)

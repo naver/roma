@@ -72,12 +72,6 @@ Alternatively one can install the latest version of *RoMa* directly from the sou
 pip install git+https://github.com/naver/roma
 ```
 
-**With old pytorch versions (torch<1.8)**, we recommend installing [torch-batch-svd](https://github.com/KinglittleQ/torch-batch-svd)
-to achieve a significant speed-up with `special_procrustes` on CUDA GPUs.
-You can check that this module is properly loaded using the function `roma.utils.is_torch_batch_svd_available()`.
-**With recent pytorch installations (torch>=1.8), `torch-batch-svd` is no longer needed or used.**
-
-
 ## License
 *RoMa*, Copyright (c) 2020 NAVER Corp., is licensed under the 3-Clause BSD License (see [license](https://github.com/naver/roma/blob/master/LICENSE)).
 

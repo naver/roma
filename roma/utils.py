@@ -11,13 +11,6 @@ import roma.internal
 import roma.mappings
 
 
-def is_torch_batch_svd_available() -> bool:
-    r"""
-    Returns True if the module 'torch_batch_svd' has been loaded. Returns False otherwise.
-    """
-    return roma.internal._IS_TORCH_BATCH_SVD_AVAILABLE
-
-
 def is_orthonormal_matrix(R, epsilon=1e-7):
     r"""
     Test if matrices are orthonormal.
@@ -189,7 +182,7 @@ def unitquat_geodesic_distance(q1, q2):
     Returns:
         batch of angles in radians (... tensor).
     """
-    return 4.0 * torch.asin(0.5 * torch.min(roma.internal.norm(q2 - q1, dim=-1), roma.internal.norm(q2 + q1, dim=-1)))
+    return 4.0 * torch.asin(0.5 * torch.min(torch.linalg.norm(q2 - q1, dim=-1), torch.linalg.norm(q2 + q1, dim=-1)))
 
 
 def rotvec_geodesic_distance(vec1, vec2):
@@ -245,7 +238,7 @@ def quat_normalize(quat):
     Returns:
         batch of quaternions (...x4 tensor, XYZW convention).
     """
-    return quat / roma.internal.norm(quat, dim=-1, keepdim=True)
+    return quat / torch.linalg.norm(quat, dim=-1, keepdim=True)
 
 
 def quat_product(p, q):
