@@ -4,3 +4,32 @@ requires = [
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "roma"
+version = "1.6"
+description = "A lightweight library to deal with 3D rotations in PyTorch."
+readme = "README.md"
+authors = [{ name = "Romain Brégier", email = "romain.bregier@naverlabs.com" }]
+license = "BSD-3-Clause"
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.0",
+    "numpy",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/naver/roma"
+
+[dependency-groups]
+dev = [
+    "sphinx",
+    "sphinx-rtd-theme",
+]
+
+[tool.setuptools]
+packages = ["roma"]

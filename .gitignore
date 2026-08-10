@@ -9,3 +9,4 @@ docs/.buildinfo
 htmlcov/
 .coverage
 build/
+.venv/
