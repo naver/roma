@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.x"]
-        pytorch-version: ["torch==2.0.1", "torch"]
+        pytorch-version: ["torch"]
         
     steps:
       - name: Set up Python
