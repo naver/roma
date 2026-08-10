@@ -240,6 +240,9 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.6:
+    - Added forward-mode differentiation (jvp) support for :func:`~roma.mappings.procrustes()` and :func:`~roma.mappings.special_procrustes()`, including compatibility with ``torch.func`` transforms (``jvp``, ``jacfwd``, ``vmap``).
+    - PyTorch 2.0 or above is now required.
 Version 1.5.7:
     - Changes in ``roma.procrustes`` for better graph tracing support.
 Version 1.5.6:

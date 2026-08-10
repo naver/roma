@@ -12,12 +12,9 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.8", "3.x"]
-        pytorch-version: ["torch==1.6.0", "torch"]
-        exclude:
-          - python-version: "3.x"
-            pytorch-version: "torch==1.6.0"
-
+        python-version: ["3.x"]
+        pytorch-version: ["torch==2.0.1", "torch"]
+        
     steps:
       - name: Set up Python
         uses: actions/setup-python@v4

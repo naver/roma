@@ -9,12 +9,14 @@ import torch
 import roma.internal
 
 class _ProcrustesManualDerivatives(torch.autograd.Function):
+    generate_vmap_rule = True
+
     # Explicitely cast inputs to float32 for CPU and CUDA devices when using autocast,
     # as svd is not supported with bfloat16 and float16 on CPU and CUDA devices.
     @staticmethod
     @roma.internal.custom_fwd(device_type='cpu', cast_inputs=torch.float32)
     @roma.internal.custom_fwd(device_type='cuda', cast_inputs=torch.float32)
-    def forward(ctx, M, force_rotation, regularization, gradient_eps):
+    def forward(M, force_rotation, regularization, gradient_eps):
         assert (M.dim() == 3 and M.shape[1] == M.shape[2]), "Input should be a BxDxD batch of matrices."
         # Singular values of D are sorted in descending order
         U, D, V = roma.internal.svd(M)
@@ -22,8 +24,10 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
             # We flip the smallest singular value to ensure getting a rotation matrix
             with torch.no_grad():
                 flip = (torch.det(U) * torch.det(V) < 0)
-                flip_matrix = torch.ones(*M.shape[:2], dtype=M.dtype, device=M.device)
-                flip_matrix[:,-1] = 1. - 2. * flip.to(U.dtype)
+                sign = 1. - 2. * flip.to(U.dtype)
+                # Matrix of ones, except for its last column equal to +-1 depending on the flip,
+                # built out-of-place for vmap compatibility.
+                flip_matrix = torch.cat((torch.ones_like(D[:,:-1]), sign[:,None]), dim=-1)
             DS = D * flip_matrix
             del D
             US = U * flip_matrix[:,None,:]
@@ -32,34 +36,61 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
             DS = D
             US = U
         R = US @ V.transpose(-1, -2)
-        # Store data for backprop:
-        ctx.save_for_backward(US, DS, V, M, R)
-        ctx.gradient_eps = gradient_eps
-        ctx.regularization = regularization
-        return R, DS
+        # US and V are returned to make them available to setup_context,
+        # and are discarded by the public wrapper.
+        return R, DS, US, V
 
     @staticmethod
-    @roma.internal.custom_bwd(device_type='cuda')
-    @roma.internal.custom_bwd(device_type='cpu')
-    def backward(ctx, grad_R, grad_DS):
+    def setup_context(ctx, inputs, output):
+        M, force_rotation, regularization, gradient_eps = inputs
+        R, DS, US, V = output
+        # Store data for backprop and forward-mode differentiation:
+        ctx.save_for_backward(US, DS, V, M, R)
+        ctx.save_for_forward(US, DS, V)
+        ctx.mark_non_differentiable(US, V)
+        ctx.gradient_eps = gradient_eps
+        ctx.regularization = regularization
+
+    @staticmethod
+    def backward(ctx, grad_R, grad_DS, grad_US, grad_V):
+        # Backward-mode differentiation (vector-Jacobian product).
         US, DS, V, M, R = ctx.saved_tensors
         gradient_eps = ctx.gradient_eps
-
-        USik_Vjl = torch.einsum('bik,bjl -> bklij', US, V)
-        USil_Vjk = USik_Vjl.transpose(1,2)
-        DSl = DS[:,None,:,None,None]
-        DSk = DS[:,:,None,None,None]
-        Omega_klij = (USik_Vjl - USil_Vjk) * roma.internal._pseudo_inverse(DSk + DSl, gradient_eps)
-        # Note: this intermediary matrix may require lots of memory for large dimensional cases.
-        # Diagonal k==l should always be 0 thanks to the clamping of the pseudo-inverse.
-        
-        grad_M = torch.einsum('bnm, bnk, bklij, bml -> bij', grad_R, US, Omega_klij, V)
-        # Gradient contribution from singular values
-        grad_M = grad_M + (US * grad_DS[:,None,:]) @ V.transpose(-1, -2)
-        if ctx.regularization != 0.0:
-            # Add a regularization term in the direction of the orthonormalized output.
-            grad_M = grad_M + ctx.regularization * (M - R)
+        # Disable autocast to perform computations in full precision.
+        with roma.internal.autocast_disabled(US.device.type):
+            # Omega_klij = (US_ik V_jl - US_il V_jk) / (DS_k + DS_l), antisymmetric with respect to (k,l).
+            # Diagonal k==l is 0 thanks to the clamping of the pseudo-inverse.
+            # Note: this intermediary tensor may require lots of memory for large dimensional cases.
+            USik_Vjl = torch.einsum('bik,bjl -> bklij', US, V)
+            USil_Vjk = USik_Vjl.transpose(1,2)
+            DSl = DS[:,None,:,None,None]
+            DSk = DS[:,:,None,None,None]
+            Omega_klij = (USik_Vjl - USil_Vjk) * roma.internal._pseudo_inverse(DSk + DSl, gradient_eps)
+            grad_M = torch.einsum('bnm, bnk, bklij, bml -> bij', grad_R, US, Omega_klij, V)
+            # Gradient contribution of the singular values.
+            grad_M = grad_M + (US * grad_DS[:,None,:]) @ V.transpose(-1, -2)
+            if ctx.regularization != 0.0:
+                # Add a regularization term in the direction of the orthonormalized output.
+                # Note: it only affects backpropagation, not forward-mode differentiation.
+                grad_M = grad_M + ctx.regularization * (M - R)
         return grad_M, None, None, None
+
+    @staticmethod
+    def jvp(ctx, dM, *args):
+        # Forward-mode differentiation (Jacobian-vector product).
+        # Note: the regularization term only affects backpropagation, and is therefore ignored here.
+        US, DS, V = ctx.saved_for_forward
+        # Disable autocast to perform computations in full precision.
+        with roma.internal.autocast_disabled(US.device.type):
+            dM = dM.to(US.dtype)
+            A = US.transpose(-1, -2) @ dM @ V
+            # Z_kl = (A_kl - A_lk) / (DS_k + DS_l), antisymmetric with respect to (k,l).
+            # Diagonal k==l is 0 thanks to the clamping of the pseudo-inverse.
+            Z = (A - A.transpose(-1, -2)) * roma.internal._pseudo_inverse(DS[:,:,None] + DS[:,None,:], ctx.gradient_eps)
+            dR = US @ Z @ V.transpose(-1, -2)
+            # Tangent contribution of the singular values.
+            dDS = torch.diagonal(A, dim1=-2, dim2=-1)
+        return dR, dDS, None, None
 
 def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, return_singular_values : bool = False):
     r""" 
@@ -68,15 +99,16 @@ def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, r
     Args:
         M (...xNxN tensor): batch of square matrices.
         force_rotation (bool): if True, forces the output to be a rotation matrix.
-        regularization (float >= 0): weight of a regularization term added to the gradient.
+        regularization (float >= 0): weight of a regularization term added to the gradient during backpropagation.
             Using this regularization is equivalent to adding a term :math:`regularization * \| M - R \|_F^2` to the training loss function.
-        gradient_eps (float > 0): small value used to enforce numerical stability during backpropagation.
+            It only affects backpropagation: forward-mode differentiation (jvp) returns the true directional derivative and ignores it.
+        gradient_eps (float > 0): small value used to enforce numerical stability during differentiation.
     Returns:
         batch of orthonormal matrices (...xNxN tensor) and optional singular values.
         For advanced users, singular values of the SVD decomposition with sign flipping (... tensor) can optionally be returned by setting the argument :code:`return_singular_values` to :code:`True`.
     """
     M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
-    R, DS = _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)
+    R, DS = _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)[:2]
     R = roma.internal.unflatten_batch_dims(R, batch_shape)
     if not return_singular_values:
         return R
@@ -90,13 +122,13 @@ def special_procrustes(M, regularization=0.0, gradient_eps=1e-5, return_singular
 
     Args:
         M (...xNxN tensor): batch of square matrices.
-        regularization (float >= 0): weight of a regularization term added to the gradient.
+        regularization (float >= 0): weight of a regularization term added to the gradient during backpropagation.
             Using this regularization is equivalent to adding a term :math:`regularization * \| M - R \|_F^2` to the training loss function.
-        gradient_eps (float > 0): small value used to enforce numerical stability during backpropagation.
+            It only affects backpropagation: forward-mode differentiation (jvp) returns the true directional derivative and ignores it.
+        gradient_eps (float > 0): small value used to enforce numerical stability during differentiation.
     Returns:
         batch of rotation matrices (...xNxN tensor).
         For advanced users, singular values of the SVD decomposition with sign flipping (... tensor) can optionally be returned by setting the argument :code:`return_singular_values` to :code:`True`.
-
     """
     return procrustes(M, True, regularization, gradient_eps, return_singular_values)
 

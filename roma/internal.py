@@ -6,6 +6,7 @@ Set of functions for internal module use.
 """
 
 import torch
+import contextlib
 
 # SVD decomposition
 # Default behavior: vanilla svd
@@ -75,9 +76,7 @@ def _pseudo_inverse(x, eps):
     :meta private:
     Element-wise pseudo inverse.
     """
-    inv = 1.0/x
-    inv[torch.abs(x) < eps] = 0.0
-    return inv    
+    return torch.where(torch.abs(x) < eps, torch.zeros_like(x), 1.0/x)
 
 # Batched eigenvalue decomposition.
 # Recent version of PyTorch deprecated the use of torch.symeig.
@@ -125,3 +124,15 @@ try:
 except AttributeError:
     def custom_bwd(**kwargs):
         return lambda x : x
+
+def autocast_disabled(device_type):
+    r"""
+    :meta private:
+    Context manager disabling autocast for the considered device type, if supported.
+    Substitute for torch.amp.custom_bwd, which does not support autograd Functions defining a separate setup_context method.
+    """
+    try:
+        return torch.autocast(device_type=device_type, enabled=False)
+    except RuntimeError:
+        # Autocast may not be supported for every device type.
+        return contextlib.nullcontext()
