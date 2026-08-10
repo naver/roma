@@ -5,7 +5,6 @@ import unittest
 import torch
 import roma
 import numpy as np
-from test.utils import is_close
 import itertools
 
 device = torch.device(0) if torch.cuda.is_available() else torch.device('cpu')

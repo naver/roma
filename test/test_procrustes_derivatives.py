@@ -15,10 +15,8 @@ class TestProcrustesDerivatives(unittest.TestCase):
         torch.manual_seed(666)
         d = 3
 
-        M = torch.randn(batch_size, d, d, dtype=dtype, device=device)
+        M = torch.randn(batch_size, d, d, dtype=dtype, device=device, requires_grad=True)
         # Check derivatives
-        eps = 1e-7
-        eps2 = 1e-4
         for func in (lambda x : roma.procrustes(x),
                     lambda x : roma.special_procrustes(x),
                     lambda x: roma.procrustes_naive(x),
@@ -28,10 +26,7 @@ class TestProcrustesDerivatives(unittest.TestCase):
                     lambda x: roma.procrustes_naive(x, return_singular_values=True)[1],
                     lambda x: roma.special_procrustes_naive(x, return_singular_values=True)[1],
                     ):
-            # Numerical gradient
-            num = utils.numerical_jacobian(func, M, eps)
-            auto = utils.automatic_jacobian(func, M)
-            self.assertTrue(utils.is_close(num, auto, eps2=eps2))
+            self.assertTrue(torch.autograd.gradcheck(func, (M,), eps=1e-7, atol=1e-4))
 
     def _test_convergence(self, random_initialization, regularization=0.0):
         r"""
@@ -171,8 +166,8 @@ class TestProcrustesForwardDerivatives(unittest.TestCase):
         self.assertTrue(utils.is_close(num, dR, eps2=1e-6))
         # torch.func.jacfwd
         jacobian_fwd = torch.func.jacfwd(func)(M)
-        jacobian_bwd = utils.automatic_jacobian(func, M)
-        self.assertTrue(utils.is_close(jacobian_bwd, jacobian_fwd.cpu(), eps2=1e-7))
+        jacobian_bwd = torch.autograd.functional.jacobian(func, M)
+        self.assertTrue(utils.is_close(jacobian_bwd, jacobian_fwd, eps2=1e-7))
         # torch.vmap
         R_vmap = torch.vmap(lambda m: func(m[None])[0])(M)
         self.assertTrue(utils.is_close(func(M), R_vmap, eps2=1e-7))
