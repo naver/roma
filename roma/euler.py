@@ -6,18 +6,20 @@ import roma
 import math
 import roma.internal
 
+
 def _elementary_basis_index(axis):
     r"""
     Return the index corresponding to a given axis label.
     """
-    if axis == 'x':
+    if axis == "x":
         return 0
-    elif axis == 'y':
+    elif axis == "y":
         return 1
-    elif axis == 'z':
+    elif axis == "z":
         return 2
     else:
         raise ValueError("Invalid axis.")
+
 
 def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dtype=None, device=None):
     r"""
@@ -31,7 +33,7 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
         angles (...xD tensor, or tuple/list of D floats or ... tensors): a list of angles associated to each axis, expressed in radians by default.
         degrees (bool): if True, input angles are assumed to be expressed in degrees.
         normalize (bool): if True, normalize the returned quaternion to compensate potential numerical.
-    
+
     Returns:
         A batch of unit quaternions (...x4 tensor, XYZW convention).
 
@@ -56,12 +58,12 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
             angle = torch.deg2rad(angle)
         batch_shape = angle.shape
         rotvec = torch.zeros(batch_shape + torch.Size((3,)), device=angle.device, dtype=angle.dtype)
-        if axis == 'X':
-            rotvec[...,0] = angle
-        elif axis == 'Y':
-            rotvec[...,1] = angle
-        elif axis == 'Z':
-            rotvec[...,2] = angle
+        if axis == "X":
+            rotvec[..., 0] = angle
+        elif axis == "Y":
+            rotvec[..., 1] = angle
+        elif axis == "Z":
+            rotvec[..., 2] = angle
         else:
             raise ValueError("Invalid convention (expected format: 'xyz', 'zxz', 'XYZ', etc.).")
         q = roma.rotvec_to_unitquat(rotvec)
@@ -70,6 +72,7 @@ def euler_to_unitquat(convention: str, angles, degrees=False, normalize=True, dt
         return unitquats[0]
     else:
         return roma.quat_composition(unitquats, normalize=normalize)
+
 
 def euler_to_rotvec(convention: str, angles, degrees=False, dtype=None, device=None):
     r"""
@@ -83,7 +86,10 @@ def euler_to_rotvec(convention: str, angles, degrees=False, dtype=None, device=N
     Returns:
         a batch of rotation vectors (...x3 tensor).
     """
-    return roma.unitquat_to_rotvec(euler_to_unitquat(convention=convention, angles=angles, degrees=degrees, dtype=dtype, device=device))
+    return roma.unitquat_to_rotvec(
+        euler_to_unitquat(convention=convention, angles=angles, degrees=degrees, dtype=dtype, device=device)
+    )
+
 
 def euler_to_rotmat(convention: str, angles, degrees=False, dtype=None, device=None):
     r"""
@@ -93,13 +99,16 @@ def euler_to_rotmat(convention: str, angles, degrees=False, dtype=None, device=N
         convention (string): 'xyz' for example. See :func:`~roma.euler.euler_to_unitquat()`.
         angles (...xD tensor, or tuple/list of D floats or ... tensors): a list of angles associated to each axis, expressed in radians by default.
         degrees (bool): if True, input angles are assumed to be expressed in degrees.
-    
+
     Returns:
         a batch of rotation matrices (...x3x3 tensor).
     """
-    return roma.unitquat_to_rotmat(euler_to_unitquat(convention=convention, angles=angles, degrees=degrees, dtype=dtype, device=device))
+    return roma.unitquat_to_rotmat(
+        euler_to_unitquat(convention=convention, angles=angles, degrees=degrees, dtype=dtype, device=device)
+    )
 
-def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, epsilon=1e-7):
+
+def unitquat_to_euler(convention: str, quat, as_tuple=False, degrees=False, epsilon=1e-7):
     r"""
     Convert unit quaternion to Euler angles representation.
 
@@ -120,7 +129,7 @@ def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, eps
     assert len(convention) == 3
 
     pi = math.pi
-    lamb = math.pi/2
+    lamb = math.pi / 2
 
     extrinsic = convention.islower()
     if not extrinsic:
@@ -134,30 +143,29 @@ def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, eps
     k = _elementary_basis_index(convention[2])
     assert i != j and j != k, "Consecutive axes should not be identical."
 
-    symmetric = (i == k)
+    symmetric = i == k
 
     if symmetric:
         # Get third axis
         k = 3 - i - j
 
     # Step 0
-    # Check if permutation is even (+1) or odd (-1) 
+    # Check if permutation is even (+1) or odd (-1)
     sign = (i - j) * (j - k) * (k - i) // 2
 
     # Step 1
-    # Permutate quaternion elements            
+    # Permutate quaternion elements
     if symmetric:
-        a = quat[:,3]
-        b = quat[:,i]
-        c = quat[:,j]
-        d = quat[:,k] * sign
+        a = quat[:, 3]
+        b = quat[:, i]
+        c = quat[:, j]
+        d = quat[:, k] * sign
     else:
-        a = quat[:,3] - quat[:,j]
-        b = quat[:,i] + quat[:,k] * sign
-        c = quat[:,j] + quat[:,3]
-        d = quat[:,k] * sign - quat[:,i]
+        a = quat[:, 3] - quat[:, j]
+        b = quat[:, i] + quat[:, k] * sign
+        c = quat[:, j] + quat[:, 3]
+        d = quat[:, k] * sign - quat[:, i]
 
-    
     # intrinsic/extrinsic conversion helpers
     if extrinsic:
         angle_first = 0
@@ -169,7 +177,7 @@ def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, eps
     # Step 2
     # Compute second angle...
     angles = [torch.empty(N, device=quat.device, dtype=quat.dtype) for _ in range(3)]
-    
+
     angles[1] = 2 * torch.atan2(roma.internal.hypot(c, d), roma.internal.hypot(a, b))
 
     # ... and check if equal to is 0 or pi, causing a singularity
@@ -180,16 +188,16 @@ def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, eps
     # compute first and third angles, according to case
     half_sum = torch.atan2(b, a)
     half_diff = torch.atan2(d, c)
-    
+
     # no singularities
     angles[angle_first] = half_sum - half_diff
     angles[angle_third] = half_sum + half_diff
-    
+
     # any degenerate case
     angles[2][case1or2] = 0
     angles[0][case1] = 2 * half_sum[case1]
     angles[0][case2] = 2 * (-1 if extrinsic else 1) * half_diff[case2]
-            
+
     # for Tait-Bryan/asymmetric sequences
     if not symmetric:
         angles[angle_third] *= sign
@@ -208,7 +216,8 @@ def unitquat_to_euler(convention : str, quat, as_tuple=False, degrees=False, eps
     else:
         return torch.stack(angles, dim=-1)
 
-def rotvec_to_euler(convention : str, rotvec, as_tuple=False, degrees=False, epsilon=1e-7):
+
+def rotvec_to_euler(convention: str, rotvec, as_tuple=False, degrees=False, epsilon=1e-7):
     r"""
     Convert rotation vector to Euler angles representation.
 
@@ -224,9 +233,12 @@ def rotvec_to_euler(convention : str, rotvec, as_tuple=False, degrees=False, eps
         A stacked ...x3 tensor corresponding to Euler angles, expressed by default in radians.
         In case of gimbal lock, the third angle is arbitrarily set to 0.
     """
-    return unitquat_to_euler(convention, roma.rotvec_to_unitquat(rotvec), as_tuple=as_tuple, degrees=degrees, epsilon=epsilon)
+    return unitquat_to_euler(
+        convention, roma.rotvec_to_unitquat(rotvec), as_tuple=as_tuple, degrees=degrees, epsilon=epsilon
+    )
 
-def rotmat_to_euler(convention : str, rotmat, as_tuple=False, degrees=False, epsilon=1e-7):
+
+def rotmat_to_euler(convention: str, rotmat, as_tuple=False, degrees=False, epsilon=1e-7):
     r"""
     Convert rotation matrix to Euler angles representation.
 
@@ -242,4 +254,6 @@ def rotmat_to_euler(convention : str, rotmat, as_tuple=False, degrees=False, eps
         A stacked ...x3 tensor corresponding to Euler angles, expressed by default in radians.
         In case of gimbal lock, the third angle is arbitrarily set to 0.
     """
-    return unitquat_to_euler(convention, roma.rotmat_to_unitquat(rotmat), as_tuple=as_tuple, degrees=degrees, epsilon=epsilon)
+    return unitquat_to_euler(
+        convention, roma.rotmat_to_unitquat(rotmat), as_tuple=as_tuple, degrees=degrees, epsilon=epsilon
+    )

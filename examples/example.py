@@ -39,9 +39,9 @@ steps = torch.linspace(0, 1.0, 5)
 q_interpolated = roma.utils.unitquat_slerp(q0, q1, steps)
 # Print interpolations for an arbitrary element of the batch
 idx = 1
-print('q0:\n', q0[idx])
-print('q1:\n', q1[idx])
-print('q_interpolated:\n', q_interpolated[:,idx])
+print("q0:\n", q0[idx])
+print("q1:\n", q1[idx])
+print("q_interpolated:\n", q_interpolated[:, idx])
 
 # Spherical interpolation between rotation vectors (shortest path)
 rotvec0, rotvec1 = torch.randn(batch_shape + (3,)), torch.randn(batch_shape + (3,))

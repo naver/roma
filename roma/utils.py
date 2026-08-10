@@ -10,11 +10,13 @@ import math
 import roma.internal
 import roma.mappings
 
+
 def is_torch_batch_svd_available() -> bool:
     r"""
     Returns True if the module 'torch_batch_svd' has been loaded. Returns False otherwise.
     """
     return roma.internal._IS_TORCH_BATCH_SVD_AVAILABLE
+
 
 def is_orthonormal_matrix(R, epsilon=1e-7):
     r"""
@@ -28,12 +30,13 @@ def is_orthonormal_matrix(R, epsilon=1e-7):
 
     """
     R, batch_shape = roma.internal.flatten_batch_dims(R, end_dim=-3)
-    assert (R.dim() == 3), "Input should be a BxDxD batch of matrices."
+    assert R.dim() == 3, "Input should be a BxDxD batch of matrices."
     B, D, D1 = R.shape
     assert D == D1, "Input should be a BxDxD batch of matrices."
-    errors = torch.norm(R @ R.transpose(-1, -2) - torch.eye(D, device=R.device, dtype=R.dtype), dim=[-2,-1])
+    errors = torch.norm(R @ R.transpose(-1, -2) - torch.eye(D, device=R.device, dtype=R.dtype), dim=[-2, -1])
     return torch.all(errors < epsilon)
-    
+
+
 def is_rotation_matrix(R, epsilon=1e-7):
     r"""
     Test if matrices are rotation matrices.
@@ -48,7 +51,8 @@ def is_rotation_matrix(R, epsilon=1e-7):
         return False
     return torch.all(torch.det(R) > 0)
 
-def random_unitquat(size = tuple(), dtype=torch.float, device=None, generator=None):
+
+def random_unitquat(size=tuple(), dtype=torch.float, device=None, generator=None):
     r"""
     Generates a batch of random unit quaternions, uniformly sampled according to the usual quaternion metric.
 
@@ -72,9 +76,12 @@ def random_unitquat(size = tuple(), dtype=torch.float, device=None, generator=No
     theta2 = (2.0 * math.pi) * torch.rand(size, dtype=dtype, device=device)
     r1 = torch.sqrt(1.0 - x0)
     r2 = torch.sqrt(x0)
-    return torch.stack((r1 * torch.sin(theta1), r1 * torch.cos(theta1), r2 * torch.sin(theta2), r2 * torch.cos(theta2)), dim=-1)
+    return torch.stack(
+        (r1 * torch.sin(theta1), r1 * torch.cos(theta1), r2 * torch.sin(theta2), r2 * torch.cos(theta2)), dim=-1
+    )
 
-def random_rotmat(size  = tuple(), dtype=torch.float, device=None, generator=None):
+
+def random_rotmat(size=tuple(), dtype=torch.float, device=None, generator=None):
     r"""
     Generates a batch of random 3x3 rotation matrices, uniformly sampled according to the usual rotation metric.
 
@@ -90,7 +97,8 @@ def random_rotmat(size  = tuple(), dtype=torch.float, device=None, generator=Non
     R = roma.mappings.unitquat_to_rotmat(quat)
     return R
 
-def random_rotvec(size = tuple(), dtype=torch.float, device=None, generator=None):
+
+def random_rotvec(size=tuple(), dtype=torch.float, device=None, generator=None):
     r"""
     Generates a batch of random rotation vectors, uniformly sampled according to the usual rotation metric.
 
@@ -102,7 +110,8 @@ def random_rotvec(size = tuple(), dtype=torch.float, device=None, generator=None
     quat = random_unitquat(size, dtype=dtype, device=device, generator=generator)
     return roma.mappings.unitquat_to_rotvec(quat)
 
-def identity_quat(size = tuple(), dtype=torch.float, device=None):
+
+def identity_quat(size=tuple(), dtype=torch.float, device=None):
     r"""
     Return a batch of identity unit quaternions.
 
@@ -117,9 +126,10 @@ def identity_quat(size = tuple(), dtype=torch.float, device=None):
     if type(size) == int:
         size = (size,)
     quat = torch.zeros(4, dtype=dtype, device=device)
-    quat[...,-1] = 1.
+    quat[..., -1] = 1.0
     quat = quat.expand(list(size) + [-1])
     return quat
+
 
 def rotmat_cosine_angle(R):
     r"""
@@ -131,10 +141,13 @@ def rotmat_cosine_angle(R):
     Returns:
         batch of cosine angles (... tensor).
     """
-    assert R.shape[-2:] == (3,3), "Expecting a ...x3x3 batch of rotation matrices"
-    return  0.5 * (R[...,0,0] + R[...,1,1] + R[...,2,2] - 1.0)
+    assert R.shape[-2:] == (3, 3), "Expecting a ...x3x3 batch of rotation matrices"
+    return 0.5 * (R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2] - 1.0)
+
 
 _ONE_OVER_2SQRT2 = 1.0 / (2 * math.sqrt(2))
+
+
 def rotmat_geodesic_distance(R1, R2, clamping=1.0):
     r"""
     Returns the angular distance alpha between a pair of rotation matrices.
@@ -150,17 +163,18 @@ def rotmat_geodesic_distance(R1, R2, clamping=1.0):
     """
     return 2.0 * torch.asin(torch.clamp_max(torch.norm(R2 - R1, dim=[-1, -2]) * _ONE_OVER_2SQRT2, clamping))
 
+
 def rotmat_geodesic_distance_naive(R1, R2):
     r"""
     Returns the angular distance between a pair of rotation matrices.
     Based on :func:`~rotmat_cosine_angle` and less precise than :func:`~roma.utils.rotmat_geodesic_distance` for nearby rotations.
-    
+
     Args:
         R1, R2 (...x3x3 tensor): batch of 3x3 rotation matrices.
     Returns:
         batch of angles in radians (... tensor).
     """
-    R = R1.transpose(-1,-2) @ R2
+    R = R1.transpose(-1, -2) @ R2
     cos = rotmat_cosine_angle(R)
     return torch.acos(torch.clamp(cos, -1.0, 1.0))
 
@@ -177,6 +191,7 @@ def unitquat_geodesic_distance(q1, q2):
     """
     return 4.0 * torch.asin(0.5 * torch.min(roma.internal.norm(q2 - q1, dim=-1), roma.internal.norm(q2 + q1, dim=-1)))
 
+
 def rotvec_geodesic_distance(vec1, vec2):
     r"""
     Returns the angular distance between rotations represented by rotation vectors.
@@ -189,6 +204,7 @@ def rotvec_geodesic_distance(vec1, vec2):
     """
     return unitquat_geodesic_distance(roma.mappings.rotvec_to_unitquat(vec1), roma.mappings.rotvec_to_unitquat(vec2))
 
+
 def quat_conjugation(quat):
     r"""
     Returns the conjugation of input batch of quaternions.
@@ -198,11 +214,12 @@ def quat_conjugation(quat):
     Returns:
         batch of quaternions (...x4 tensor, XYZW convention).
     Note:
-        Conjugation of a unit quaternion is equal to its inverse.        
+        Conjugation of a unit quaternion is equal to its inverse.
     """
     inv = quat.clone()
-    inv[...,:3] *= -1
+    inv[..., :3] *= -1
     return inv
+
 
 def quat_inverse(quat):
     r"""
@@ -214,9 +231,10 @@ def quat_inverse(quat):
         batch of quaternions (...x4 tensor, XYZW convention).
     Note:
         - Inverse of null quaternion is undefined.
-        - For unit quaternions, consider using conjugation instead.        
+        - For unit quaternions, consider using conjugation instead.
     """
     return quat_conjugation(quat) / torch.sum(quat**2, dim=-1, keepdim=True)
+
 
 def quat_normalize(quat):
     r"""
@@ -225,9 +243,10 @@ def quat_normalize(quat):
     Args:
         quat (...x4 tensor, XYZW convention): batch of quaternions.
     Returns:
-        batch of quaternions (...x4 tensor, XYZW convention).        
+        batch of quaternions (...x4 tensor, XYZW convention).
     """
     return quat / roma.internal.norm(quat, dim=-1, keepdim=True)
+
 
 def quat_product(p, q):
     r"""
@@ -248,13 +267,13 @@ def quat_product(p, q):
     # product[..., 3] = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
     # product[..., :3] = (p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] +
     #                   torch.cross(p[..., :3], q[..., :3], dim=-1))
-    
-    vector = (p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] +
-                      torch.cross(p[..., :3], q[..., :3], dim=-1))
-    last = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
-    return torch.cat((vector, last[...,None]), dim=-1)
 
-def quat_composition(sequence, normalize = False):
+    vector = p[..., None, 3] * q[..., :3] + q[..., None, 3] * p[..., :3] + torch.cross(p[..., :3], q[..., :3], dim=-1)
+    last = p[..., 3] * q[..., 3] - torch.sum(p[..., :3] * q[..., :3], axis=-1)
+    return torch.cat((vector, last[..., None]), dim=-1)
+
+
+def quat_composition(sequence, normalize=False):
     r"""
     Returns the product of a sequence of quaternions.
 
@@ -271,6 +290,7 @@ def quat_composition(sequence, normalize = False):
     if normalize:
         res = quat_normalize(res)
     return res
+
 
 def quat_action(q, v, is_normalized=False):
     r"""
@@ -292,7 +312,8 @@ def quat_action(q, v, is_normalized=False):
     iquat = quat_conjugation(q) if is_normalized else quat_inverse(q)
     pure = torch.cat((v, torch.zeros(batch_shape + (1,), dtype=q.dtype, device=q.device)), dim=-1)
     res = quat_product(q, quat_product(pure, iquat))
-    return res[...,:3]
+    return res[..., :3]
+
 
 def rotvec_inverse(rotvec):
     r"""
@@ -305,19 +326,21 @@ def rotvec_inverse(rotvec):
     """
     return -rotvec
 
-def rotvec_composition(sequence, normalize = False):
+
+def rotvec_composition(sequence, normalize=False):
     r"""
     Returns a rotation vector corresponding to the composition of a sequence of rotations represented by rotation vectors.
     Composition is performed using an intermediary quaternion representation.
 
     Args:
-        sequence (sequence of ...x3 tensors): sequence of batches of rotation vectors.    
+        sequence (sequence of ...x3 tensors): sequence of batches of rotation vectors.
         normalize (bool): if True, normalize intermediary representation to compensate for numerical errors.
     """
     assert len(sequence) > 1, "Requiring at least two inputs."
     quats = [roma.rotvec_to_unitquat(rotvec) for rotvec in sequence]
     q = quat_composition(quats, normalize=normalize)
     return roma.unitquat_to_rotvec(q)
+
 
 def rotmat_inverse(R):
     r"""
@@ -332,16 +355,17 @@ def rotmat_inverse(R):
     """
     return R.transpose(-1, -2)
 
-def rotmat_composition(sequence, normalize = False):
+
+def rotmat_composition(sequence, normalize=False):
     r"""
     Returns the product of a sequence of rotation matrices.
 
     Args:
-        sequence (sequence of ...xNxN tensors): sequence of batches of rotation matrices.  
+        sequence (sequence of ...xNxN tensors): sequence of batches of rotation matrices.
         normalize: if True, apply special Procrustes orthonormalization to compensate for numerical errors.
     Returns:
         batch of rotation matrices (...xNxN tensor).
-    """    
+    """
     assert len(sequence) > 1, "Requiring at least two inputs."
     result = sequence[0]
     for R in sequence[1:]:
@@ -350,15 +374,16 @@ def rotmat_composition(sequence, normalize = False):
         result = roma.mappings.special_procrustes(result)
     return result
 
+
 def unitquat_slerp(q0, q1, steps, shortest_arc=True):
     r"""
     Spherical linear interpolation between two unit quaternions.
-    
-    Args: 
+
+    Args:
         q0, q1 (Ax4 tensor): batch of unit quaternions (A may contain multiple dimensions).
         steps (tensor of shape B): interpolation steps, 0.0 corresponding to q0 and 1.0 to q1 (B may contain multiple dimensions).
         shortest_arc (boolean): if True, interpolation will be performed along the shortest arc on SO(3) from `q0` to `q1` or `-q1`.
-    Returns: 
+    Returns:
         batch of interpolated quaternions (BxAx4 tensor).
     Note:
         When considering quaternions as rotation representations,
@@ -371,10 +396,13 @@ def unitquat_slerp(q0, q1, steps, shortest_arc=True):
     rel_q = quat_product(quat_conjugation(q0), q1)
     rel_rotvec = roma.mappings.unitquat_to_rotvec(rel_q, shortest_arc=shortest_arc)
     # Relative rotations to apply
-    rel_rotvecs = steps.reshape(steps.shape + (1,) * rel_rotvec.dim()) * rel_rotvec.reshape((1,) * steps.dim() + rel_rotvec.shape)
+    rel_rotvecs = steps.reshape(steps.shape + (1,) * rel_rotvec.dim()) * rel_rotvec.reshape(
+        (1,) * steps.dim() + rel_rotvec.shape
+    )
     rots = roma.mappings.rotvec_to_unitquat(rel_rotvecs.reshape(-1, 3)).reshape(*rel_rotvecs.shape[:-1], 4)
     interpolated_q = quat_product(q0.reshape((1,) * steps.dim() + q0.shape).repeat(steps.shape + (1,) * q0.dim()), rots)
     return interpolated_q
+
 
 def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
     r"""
@@ -382,11 +410,11 @@ def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
     This function requires less computations than :func:`roma.utils.unitquat_slerp`,
     but is **unsuitable for extrapolation (i.e.** ``steps`` **must be within [0,1])**.
 
-    Args: 
+    Args:
         q0, q1 (Ax4 tensor): batch of unit quaternions (A may contain multiple dimensions).
         steps (tensor of shape B): interpolation steps within 0.0 and 1.0, 0.0 corresponding to q0 and 1.0 to q1 (B may contain multiple dimensions).
         shortest_arc (boolean): if True, interpolation will be performed along the shortest arc on SO(3) from `q0` to `q1` or `-q1`.
-    Returns: 
+    Returns:
         batch of interpolated quaternions (BxAx4 tensor).
     """
     q0, batch_shape = roma.internal.flatten_batch_dims(q0, end_dim=-2)
@@ -397,17 +425,17 @@ def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
     if shortest_arc:
         # Flip some quaternions to perform shortest arc interpolation.
         q1 = q1.clone()
-        q1[cos_omega < 0,:] *= -1
+        q1[cos_omega < 0, :] *= -1
         cos_omega = torch.abs(cos_omega)
     # True when q0 and q1 are close.
     nearby_quaternions = cos_omega > (1.0 - 1e-3)
 
-    cos_omega = cos_omega.reshape((1,) * steps.dim() + (-1,1))
-    s = steps.reshape(steps.shape + (1,1))
-    # General approach    
+    cos_omega = cos_omega.reshape((1,) * steps.dim() + (-1, 1))
+    s = steps.reshape(steps.shape + (1, 1))
+    # General approach
     omega = torch.acos(cos_omega)
-    alpha = torch.sin((1-s)*omega)
-    beta = torch.sin(s*omega)
+    alpha = torch.sin((1 - s) * omega)
+    beta = torch.sin(s * omega)
     # Use linear interpolation for nearby quaternions
     alpha[..., nearby_quaternions, :] = 1 - s
     beta[..., nearby_quaternions, :] = s
@@ -416,7 +444,8 @@ def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
     # Normalization of the output
     q = quat_normalize(q)
     return q.reshape(steps.shape + batch_shape + (4,))
-    
+
+
 def rotvec_slerp(rotvec0, rotvec1, steps):
     r"""
     Spherical linear interpolation between two rotation vector representations.
@@ -424,13 +453,14 @@ def rotvec_slerp(rotvec0, rotvec1, steps):
     Args:
         rotvec0, rotvec1 (Ax3 tensor): batch of rotation vectors (A may contain multiple dimensions).
         steps (tensor of shape B):  interpolation steps, 0.0 corresponding to rotvec0 and 1.0 to rotvec1 (B may contain multiple dimensions).
-    Returns: 
+    Returns:
         batch of interpolated rotation vectors (BxAx3 tensor).
     """
     q0 = roma.mappings.rotvec_to_unitquat(rotvec0)
     q1 = roma.mappings.rotvec_to_unitquat(rotvec1)
     interpolated_q = unitquat_slerp(q0, q1, steps, shortest_arc=True)
     return roma.mappings.unitquat_to_rotvec(interpolated_q)
+
 
 def rotmat_slerp(R0, R1, steps):
     r"""
@@ -439,13 +469,14 @@ def rotmat_slerp(R0, R1, steps):
     Args:
         R0, R1 (Ax3x3 tensor): batch of rotation matrices (A may contain multiple dimensions).
         steps (tensor of shape B):  interpolation steps, 0.0 corresponding to R0 and 1.0 to R1 (B may contain multiple dimensions).
-    Returns: 
+    Returns:
         batch of interpolated rotation matrices (BxAx3x3 tensor).
-    """    
+    """
     q0 = roma.mappings.rotmat_to_unitquat(R0)
     q1 = roma.mappings.rotmat_to_unitquat(R1)
     interpolated_q = unitquat_slerp(q0, q1, steps, shortest_arc=True)
     return roma.mappings.unitquat_to_rotmat(interpolated_q)
+
 
 def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
     r"""
@@ -458,7 +489,7 @@ def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
         y (...xNxD tensor): list of corresponding target vectors.
         weights (None or ...xN tensor): optional list of weights associated to each vector.
     Returns:
-        A tuple :math:`(R, s)` consisting of the rotation matrix :math:`R` (...xDxD tensor) and the scaling :math:`s` (... tensor) 
+        A tuple :math:`(R, s)` consisting of the rotation matrix :math:`R` (...xDxD tensor) and the scaling :math:`s` (... tensor)
         if :code:`compute_scaling=True`.
         Returns the rotation matrix :math:`R` otherwise.
     """
@@ -476,12 +507,13 @@ def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
         if weights is None:
             sigma2_x = torch.mean(torch.sum(torch.square(x), dim=-1), dim=-1)
         else:
-            sigma2_x = torch.sum(weights * torch.sum(torch.square(x), dim=-1), dim=-1)    
+            sigma2_x = torch.sum(weights * torch.sum(torch.square(x), dim=-1), dim=-1)
         scale = DS_trace / sigma2_x
         return R, scale
     else:
         R = roma.special_procrustes(M)
         return R
+
 
 def rigid_points_registration(x, y, weights=None, compute_scaling=False):
     r"""
@@ -494,13 +526,13 @@ def rigid_points_registration(x, y, weights=None, compute_scaling=False):
         y (...xNxD tensor): list of corresponding target points.
         weights (None or ...xN tensor): optional list of weights associated to each point.
     Returns:
-        a triplet :math:`(R, t, s)` consisting of a rotation matrix :math:`R` (...xDxD tensor), 
+        a triplet :math:`(R, t, s)` consisting of a rotation matrix :math:`R` (...xDxD tensor),
         a translation vector :math:`t` (...xD tensor),
         and a scaling :math:`s` (... tensor) if :code:`compute_scaling=True`.
         Returns :math:`(R, t)` otherwise.
 
     References:
-        S. Umeyama, “Least-squares estimation of transformation parameters between two point patterns,” IEEE Transactions on pattern analysis and machine intelligence, vol. 13, no. 4, Art. no. 4, 1991.        
+        S. Umeyama, “Least-squares estimation of transformation parameters between two point patterns,” IEEE Transactions on pattern analysis and machine intelligence, vol. 13, no. 4, Art. no. 4, 1991.
 
         W. Kabsch, "A solution for the best rotation to relate two sets of vectors". Acta Crystallographica, A32, 1976.
     """
@@ -510,17 +542,17 @@ def rigid_points_registration(x, y, weights=None, compute_scaling=False):
         ymean = torch.mean(y, dim=-2, keepdim=True)
     else:
         normalized_weights = weights / torch.sum(weights, dim=-1, keepdim=True)
-        xmean = torch.sum(normalized_weights[...,None] * x, dim=-2, keepdim=True)
-        ymean = torch.sum(normalized_weights[...,None] * y, dim=-2, keepdim=True)
+        xmean = torch.sum(normalized_weights[..., None] * x, dim=-2, keepdim=True)
+        ymean = torch.sum(normalized_weights[..., None] * y, dim=-2, keepdim=True)
     xhat = x - xmean
     yhat = y - ymean
-    
+
     # Solve the vectors registration problem
     if compute_scaling:
         R, scale = rigid_vectors_registration(xhat, yhat, weights, compute_scaling=compute_scaling)
-        t = (ymean - torch.einsum('...ik, ...jk -> ...ji', scale[...,None, None] * R, xmean)).squeeze(-2)
+        t = (ymean - torch.einsum("...ik, ...jk -> ...ji", scale[..., None, None] * R, xmean)).squeeze(-2)
         return R, t, scale
     else:
         R = rigid_vectors_registration(xhat, yhat, weights, compute_scaling=compute_scaling)
-        t = (ymean - torch.einsum('...ik, ...jk -> ...ji', R, xmean)).squeeze(-2)
+        t = (ymean - torch.einsum("...ik, ...jk -> ...ji", R, xmean)).squeeze(-2)
         return R, t

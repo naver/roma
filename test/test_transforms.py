@@ -5,7 +5,7 @@ import torch
 import roma
 from roma.transforms import *
 import unittest
-import itertools
+
 
 class TestTransforms(unittest.TestCase):
     def test_linear_apply(self):
@@ -30,7 +30,7 @@ class TestTransforms(unittest.TestCase):
         batch_shape = (10,)
         x = torch.randn(batch_shape + (3,), dtype=dtype)
         R = roma.random_rotmat(batch_shape, dtype=dtype)
-        t = torch.randn(batch_shape + (3,), dtype=dtype) 
+        t = torch.randn(batch_shape + (3,), dtype=dtype)
 
         for transform in Affine, Isometry, Rigid, RigidUnitQuat:
             if transform == RigidUnitQuat:
@@ -44,7 +44,7 @@ class TestTransforms(unittest.TestCase):
 
     def test_composition(self):
         dtype = torch.float64
-        batch_shape = (10,5)
+        batch_shape = (10, 5)
         x = torch.randn(batch_shape + (3,), dtype=dtype)
         R1 = roma.random_rotmat(batch_shape, dtype=dtype)
         t1 = torch.randn(batch_shape + (3,), dtype=dtype)
@@ -96,7 +96,7 @@ class TestTransforms(unittest.TestCase):
         R = roma.random_rotmat(batch_shape, dtype=dtype)
         t = torch.randn(batch_shape + (3,), dtype=dtype)
 
-        Ridentity = torch.eye(3, dtype=dtype).reshape([1] * len(batch_shape) + [3,3]).repeat(batch_shape + (1,1))
+        Ridentity = torch.eye(3, dtype=dtype).reshape([1] * len(batch_shape) + [3, 3]).repeat(batch_shape + (1, 1))
         tidentity = torch.zeros(batch_shape + (3,), dtype=dtype)
 
         for transform in (Linear, Orthonormal, Rotation, RotationUnitQuat):
@@ -135,17 +135,17 @@ class TestTransforms(unittest.TestCase):
 
     def test_affine_homogeneous_cast(self):
         batch_shape = (10,)
-        for D in range(2,5):
+        for D in range(2, 5):
             for Type in (Affine, Isometry, Rigid):
-                transformation = Type(torch.randn(batch_shape + (D,D)), torch.randn(batch_shape + (D,))).normalize()
+                transformation = Type(torch.randn(batch_shape + (D, D)), torch.randn(batch_shape + (D,))).normalize()
                 self.assertTrue(type(transformation) == Type)
 
                 homogeneous = transformation.to_homogeneous()
-                self.assertTrue(homogeneous.shape == batch_shape + (D+1, D+1))
-                self.assertTrue(torch.all(homogeneous[...,:D,:D] == transformation.linear))
-                self.assertTrue(torch.all(homogeneous[...,:D,D] == transformation.translation))
-                self.assertTrue(torch.all(homogeneous[...,D,:D] == 0.0))
-                self.assertTrue(torch.all(homogeneous[...,D,D] == 1))
+                self.assertTrue(homogeneous.shape == batch_shape + (D + 1, D + 1))
+                self.assertTrue(torch.all(homogeneous[..., :D, :D] == transformation.linear))
+                self.assertTrue(torch.all(homogeneous[..., :D, D] == transformation.translation))
+                self.assertTrue(torch.all(homogeneous[..., D, :D] == 0.0))
+                self.assertTrue(torch.all(homogeneous[..., D, D] == 1))
 
                 transformation2 = Type.from_homogeneous(homogeneous)
                 self.assertTrue(type(transformation2) == Type)
@@ -157,20 +157,31 @@ class TestTransforms(unittest.TestCase):
         D = 3
         dtype = torch.float64
         Type = RigidUnitQuat
-        transformation = Type(torch.randn(batch_shape + (4,), dtype=dtype), torch.randn(batch_shape + (D,), dtype=dtype)).normalize()
+        transformation = Type(
+            torch.randn(batch_shape + (4,), dtype=dtype), torch.randn(batch_shape + (D,), dtype=dtype)
+        ).normalize()
         self.assertTrue(type(transformation) == Type)
 
         homogeneous = transformation.to_homogeneous()
-        self.assertTrue(homogeneous.shape == batch_shape + (D+1, D+1))
-        self.assertTrue(roma.is_rotation_matrix(homogeneous[...,:D,:D]))
-        self.assertTrue(torch.all(roma.unitquat_geodesic_distance(roma.rotmat_to_unitquat(homogeneous[...,:D,:D]), transformation.linear) < 1e-6))
-        self.assertTrue(torch.all(homogeneous[...,:D,D] == transformation.translation))
-        self.assertTrue(torch.all(homogeneous[...,D,:D] == 0.0))
-        self.assertTrue(torch.all(homogeneous[...,D,D] == 1))
+        self.assertTrue(homogeneous.shape == batch_shape + (D + 1, D + 1))
+        self.assertTrue(roma.is_rotation_matrix(homogeneous[..., :D, :D]))
+        self.assertTrue(
+            torch.all(
+                roma.unitquat_geodesic_distance(
+                    roma.rotmat_to_unitquat(homogeneous[..., :D, :D]), transformation.linear
+                )
+                < 1e-6
+            )
+        )
+        self.assertTrue(torch.all(homogeneous[..., :D, D] == transformation.translation))
+        self.assertTrue(torch.all(homogeneous[..., D, :D] == 0.0))
+        self.assertTrue(torch.all(homogeneous[..., D, D] == 1))
 
         transformation2 = Type.from_homogeneous(homogeneous)
         self.assertTrue(type(transformation2) == Type)
-        self.assertTrue(torch.all(roma.unitquat_geodesic_distance(transformation.linear, transformation2.linear) < 1e-6))
+        self.assertTrue(
+            torch.all(roma.unitquat_geodesic_distance(transformation.linear, transformation2.linear) < 1e-6)
+        )
         self.assertTrue(torch.all(transformation.translation == transformation2.translation))
 
         # Re-use of an existing buffer
@@ -178,12 +189,12 @@ class TestTransforms(unittest.TestCase):
         self.assertTrue(homogeneous_bis is homogeneous)
 
     def test_orthonormalization(self):
-        batch_shape = (10,4)
+        batch_shape = (10, 4)
         D = 5
         dtype = torch.float64
 
         for _ in range(10):
-            raw = torch.randn(batch_shape + (D,D), dtype=dtype)
+            raw = torch.randn(batch_shape + (D, D), dtype=dtype)
 
             ortho1 = Orthonormal(raw).normalize()
             ortho2 = ortho1.normalize()
@@ -198,12 +209,12 @@ class TestTransforms(unittest.TestCase):
             self.assertTrue(torch.all(torch.isclose(iso.translation, translation)))
 
     def test_rotation(self):
-        batch_shape = (10,4)
+        batch_shape = (10, 4)
         D = 5
         dtype = torch.float64
 
         for _ in range(10):
-            raw = torch.randn(batch_shape + (D,D), dtype=dtype)
+            raw = torch.randn(batch_shape + (D, D), dtype=dtype)
             translation = torch.randn(batch_shape + (D,), dtype=dtype)
 
             rot1 = Rotation(raw).normalize()
@@ -217,14 +228,13 @@ class TestTransforms(unittest.TestCase):
             self.assertTrue(torch.all(torch.isclose(rigid.linear, rot1.linear)))
             self.assertTrue(torch.all(torch.isclose(rigid.translation, translation)))
 
-
     def test_rotation_unit_quat(self):
-        batch_shape = (10,4)
+        batch_shape = (10, 4)
         D = 3
         dtype = torch.float64
 
         for _ in range(10):
-            raw = torch.randn(batch_shape + (D,D), dtype=dtype)
+            raw = torch.randn(batch_shape + (D, D), dtype=dtype)
             translation = torch.randn(batch_shape + (D,), dtype=dtype)
 
             rot1 = Rotation(raw).normalize()
@@ -243,7 +253,7 @@ class TestTransforms(unittest.TestCase):
         r"""
         Tests with various input and output spatial dimensions.
         """
-        batch_shape = (10,4)
+        batch_shape = (10, 4)
         dtype = torch.float64
 
         for C in range(2, 5):
@@ -257,17 +267,17 @@ class TestTransforms(unittest.TestCase):
                 homogeneous = T.to_homogeneous()
                 homogeneous2 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous()
                 homogeneous3 = roma.Affine.from_homogeneous(homogeneous).to_homogeneous()
-                self.assertTrue(homogeneous.shape == batch_shape + (C+1, D+1))
+                self.assertTrue(homogeneous.shape == batch_shape + (C + 1, D + 1))
                 self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous2)))
                 self.assertTrue(torch.all(torch.isclose(homogeneous, homogeneous3)))
                 if C != D:
-                    self.assertRaises(AssertionError, lambda : roma.Orthonormal(linear))
-                    self.assertRaises(AssertionError, lambda : roma.Rotation(linear))
-                    self.assertRaises(AssertionError, lambda : roma.Isometry(linear, translation))
-                    self.assertRaises(AssertionError, lambda : roma.Rigid(linear, translation))
+                    self.assertRaises(AssertionError, lambda: roma.Orthonormal(linear))
+                    self.assertRaises(AssertionError, lambda: roma.Rotation(linear))
+                    self.assertRaises(AssertionError, lambda: roma.Isometry(linear, translation))
+                    self.assertRaises(AssertionError, lambda: roma.Rigid(linear, translation))
 
     def test_rigid_conversions(self):
-        batch_shape = (2,3,6)
+        batch_shape = (2, 3, 6)
         dtype = torch.float64
         rigid = roma.Rigid(roma.random_rotmat(batch_shape, dtype=dtype), torch.zeros(batch_shape + (3,), dtype=dtype))
         rigidunitquat = rigid.to_rigidunitquat()
@@ -282,13 +292,13 @@ class TestTransforms(unittest.TestCase):
         self.assertTrue(torch.all(torch.isclose(x1, x2)))
 
     def test_translation_only(self):
-        batch_shape = (2,3,6)
+        batch_shape = (2, 3, 6)
         D = 3
         dtype = torch.float64
 
         # Translation-only transformation
         translation = torch.randn(batch_shape + (D,), dtype=dtype)
-        identity = torch.eye(D, dtype=dtype)[tuple([None] * len(batch_shape))].repeat(batch_shape + (1,1))
+        identity = torch.eye(D, dtype=dtype)[tuple([None] * len(batch_shape))].repeat(batch_shape + (1, 1))
         T = roma.Rigid(identity, translation)
         T1 = roma.Rigid(None, translation)
         delta = T1 @ T.inverse()
@@ -300,15 +310,15 @@ class TestTransforms(unittest.TestCase):
 
     def test_identity(self):
         D = 4
-        batch_shape = (3,5)
+        batch_shape = (3, 5)
         dtype = torch.float64
         identity_transform = roma.Rigid.identity(D, batch_shape=batch_shape)
-        self.assertTrue(torch.all(identity_transform.translation == torch.zeros((3,5,D), dtype=dtype)))
-        self.assertTrue(torch.all(identity_transform.linear == torch.eye(D)[None,None].repeat(3,5,1,1)))
+        self.assertTrue(torch.all(identity_transform.translation == torch.zeros((3, 5, D), dtype=dtype)))
+        self.assertTrue(torch.all(identity_transform.linear == torch.eye(D)[None, None].repeat(3, 5, 1, 1)))
 
         identity_transform2 = roma.Rigid.identity_like(identity_transform)
-        self.assertTrue(torch.all(identity_transform2.translation == torch.zeros((3,5,D), dtype=dtype)))
-        self.assertTrue(torch.all(identity_transform2.linear == torch.eye(4)[None,None].repeat(3,5,1,1)))
+        self.assertTrue(torch.all(identity_transform2.translation == torch.zeros((3, 5, D), dtype=dtype)))
+        self.assertTrue(torch.all(identity_transform2.linear == torch.eye(4)[None, None].repeat(3, 5, 1, 1)))
 
         # Test with no batch dimension
         identity_transform3 = roma.Rigid.identity(D)
@@ -320,7 +330,7 @@ class TestTransforms(unittest.TestCase):
         self.assertTrue(torch.all(identity_transform4.linear == torch.eye(D, dtype=dtype)))
 
     def test_linear_only(self):
-        batch_shape = (2,3,6)
+        batch_shape = (2, 3, 6)
         D = 3
         dtype = torch.float64
         # rotation-only transformation
@@ -336,7 +346,7 @@ class TestTransforms(unittest.TestCase):
         self.assertTrue(torch.all(torch.isclose(T.linear, T1.linear)))
 
     def test_squeezing(self):
-        batch_shape = (2,3,6)
+        batch_shape = (2, 3, 6)
         D = 3
         dtype = torch.float64
         # rotation-only transformation

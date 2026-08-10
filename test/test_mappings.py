@@ -7,34 +7,35 @@ import roma
 import numpy as np
 from test.utils import is_close
 
-device = torch.device(0) if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device(0) if torch.cuda.is_available() else torch.device("cpu")
+
 
 class TestMappings(unittest.TestCase):
     def test_orthonormal(self):
         for dtype in (torch.float32, torch.float64):
             M = torch.eye(3, dtype=dtype, device=device).expand(10, 3, 3).contiguous()
             self.assertTrue(roma.is_orthonormal_matrix(M))
-            M[:,:,-1] *= -1
+            M[:, :, -1] *= -1
             self.assertTrue(roma.is_orthonormal_matrix(M))
             torch.manual_seed(666)
-            M = torch.randn((1,3,3))
+            M = torch.randn((1, 3, 3))
             self.assertFalse(roma.is_orthonormal_matrix(M))
-        
+
     def test_rotation(self):
         for dtype in (torch.float32, torch.float64):
             M = torch.eye(3, dtype=dtype, device=device).expand(10, 3, 3).contiguous()
             self.assertTrue(roma.is_rotation_matrix(M))
-            M[:,:,-1] *= -1
+            M[:, :, -1] *= -1
             self.assertFalse(roma.is_rotation_matrix(M))
             torch.manual_seed(666)
-            M = torch.randn((1,3,3))
+            M = torch.randn((1, 3, 3))
             self.assertFalse(roma.is_rotation_matrix(M))
-        
+
     def test_procrustes(self):
         torch.manual_seed(666)
         for dtype in (torch.float32, torch.float64):
             for i in range(10):
-                M = torch.randn((10,3,3), dtype=dtype, device=device)
+                M = torch.randn((10, 3, 3), dtype=dtype, device=device)
                 R = roma.procrustes(M)
                 self.assertTrue(roma.is_orthonormal_matrix(R, 1e-5))
                 Rbis = roma.procrustes(R)
@@ -42,12 +43,12 @@ class TestMappings(unittest.TestCase):
                 # Ensure consistency
                 Rter = roma.procrustes_naive(M)
                 self.assertTrue(is_close(R, Rter))
-            
+
     def test_special_procrustes(self):
         torch.manual_seed(666)
         for dtype in (torch.float32, torch.float64):
             for i in range(10):
-                M = torch.randn((10,3,3), dtype=dtype, device=device)
+                M = torch.randn((10, 3, 3), dtype=dtype, device=device)
                 R = roma.special_procrustes(M)
                 self.assertTrue(roma.is_rotation_matrix(R, 1e-5))
                 Rbis = roma.special_procrustes(R)
@@ -55,22 +56,22 @@ class TestMappings(unittest.TestCase):
                 # Ensure consistency
                 Rter = roma.special_procrustes_naive(M)
                 self.assertTrue(is_close(R, Rter))
-            
+
     def test_special_gramschmidt(self):
         torch.manual_seed(666)
         for dtype in (torch.float32, torch.float64):
-            M = torch.randn((100,3,2), dtype=dtype, device=device)
+            M = torch.randn((100, 3, 2), dtype=dtype, device=device)
             R = roma.special_gramschmidt(M)
             self.assertTrue(roma.is_rotation_matrix(R, 1e-5))
             Rbis = roma.special_gramschmidt(R)
             self.assertTrue(is_close(R, Rbis))
-        
+
     def test_rotvec_unitquat(self):
         torch.manual_seed(666)
         batch_size = 100
         for dtype in (torch.float32, torch.float64):
             x = 10 * torch.randn((batch_size, 3), dtype=dtype, device=device)
-            #Forward mapping.
+            # Forward mapping.
             q = roma.rotvec_to_unitquat(x)
             # Ensure that the output is a valid unit quaternion.
             self.assertEqual(q.shape, (batch_size, 4))
@@ -84,7 +85,6 @@ class TestMappings(unittest.TestCase):
             xter = roma.unitquat_to_rotvec(qbis)
             self.assertTrue(is_close(xbis, xter))
 
-
     def test_unitquat_to_rotvec(self):
         torch.manual_seed(666)
         batch_size = 100
@@ -92,7 +92,7 @@ class TestMappings(unittest.TestCase):
             for small_angle in (True, False):
                 if small_angle:
                     q = torch.randn((batch_size, 4), dtype=dtype, device=device)
-                    q[...,3] = 1000
+                    q[..., 3] = 1000
                     q = q / torch.norm(q, dim=-1, keepdim=True)
                 else:
                     q = roma.random_unitquat(batch_size, dtype=dtype, device=device)
@@ -115,7 +115,9 @@ class TestMappings(unittest.TestCase):
                 # Ensure cyclic consistency of the mappings in any case
                 for x in xp, xm, xpn, xmn:
                     qbis = roma.rotvec_to_unitquat(x)
-                    self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 5e-6))
+                    self.assertTrue(
+                        torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 5e-6)
+                    )
 
     def test_rotvec_rotmat(self):
         torch.manual_seed(666)
@@ -124,7 +126,7 @@ class TestMappings(unittest.TestCase):
             # Perform the test for large and small angles
             for scale in (10.0, 1e-7):
                 x = scale * torch.randn((batch_size, 3), dtype=dtype, device=device)
-                #Forward mapping
+                # Forward mapping
                 R = roma.rotvec_to_rotmat(x)
                 self.assertTrue(roma.is_rotation_matrix(R, 1e-5))
                 # Backward mapping
@@ -132,8 +134,8 @@ class TestMappings(unittest.TestCase):
                 Rbis = roma.rotvec_to_rotmat(x)
                 self.assertTrue(is_close(R, Rbis))
                 xter = roma.rotmat_to_rotvec(Rbis)
-                self.assertTrue(is_close(xbis, xter))        
-        
+                self.assertTrue(is_close(xbis, xter))
+
     def test_unitquat_rotmat(self):
         torch.manual_seed(666)
         batch_size = 100
@@ -145,7 +147,7 @@ class TestMappings(unittest.TestCase):
             # Backward
             qbis = roma.rotmat_to_unitquat(R)
             self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 1e-6))
-      
+
     def test_symmatrix_to_unitquat(self):
         torch.manual_seed(668)
         batch_size = 100
@@ -187,12 +189,13 @@ class TestMappings(unittest.TestCase):
         self.assertTrue(torch.all(torch.isfinite(rotvec.grad)))
 
     def test_quat_conventions(self):
-        for batch_shape in [(), (10,), (23,5)]:
+        for batch_shape in [(), (10,), (23, 5)]:
             quat_xyzw = torch.randn(batch_shape + (4,))
             quat_wxyz = roma.mappings.quat_xyzw_to_wxyz(quat_xyzw)
             self.assertTrue(quat_xyzw.shape == quat_wxyz.shape)
             quat_xyzw_bis = roma.mappings.quat_wxyz_to_xyzw(quat_wxyz)
             self.assertTrue(torch.all(quat_xyzw == quat_xyzw_bis))
+
 
 if __name__ == "__main__":
     unittest.main()
