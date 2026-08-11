@@ -97,6 +97,27 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
         return dR, dDS, None, None
 
 
+try:
+    from torch.compiler import is_compiling as _is_torch_compiling
+except ImportError:  # torch < 2.1
+    from torch._dynamo import is_compiling as _is_torch_compiling
+
+
+# Workaround for a PyTorch bug (Dynamo, observed with torch<=2.13):
+# when a functorch transform such as torch.func.jvp is applied inside a torch.compile'd function,
+# Dynamo inlines the forward() of the autograd Function and silently discards its custom jvp rule,
+# returning potentially incorrect or unstable tangents.
+# We therefore run the autograd Function eagerly (outside of the compiled graph)
+# whenever a functorch transform is active during compilation.
+_procrustes_apply_eager = torch._dynamo.disable(_ProcrustesManualDerivatives.apply)
+
+
+def _procrustes_apply(M, force_rotation, regularization, gradient_eps):
+    if _is_torch_compiling() and torch._C._are_functorch_transforms_active():
+        return _procrustes_apply_eager(M, force_rotation, regularization, gradient_eps)
+    return _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)
+
+
 def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, return_singular_values: bool = False):
     r"""
     Returns the orthonormal matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`.
@@ -113,7 +134,7 @@ def procrustes(M, force_rotation=False, regularization=0.0, gradient_eps=1e-5, r
         For advanced users, singular values of the SVD decomposition with sign flipping (... tensor) can optionally be returned by setting the argument :code:`return_singular_values` to :code:`True`.
     """
     M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
-    R, DS = _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)[:2]
+    R, DS = _procrustes_apply(M, force_rotation, regularization, gradient_eps)[:2]
     R = roma.internal.unflatten_batch_dims(R, batch_shape)
     if not return_singular_values:
         return R

@@ -215,6 +215,27 @@ class TestProcrustesForwardDerivatives(unittest.TestCase):
         dR1 = self._jvp_dual(lambda x: roma.special_procrustes(x, regularization=1e-2), M, dM)
         self.assertTrue(torch.all(dR0 == dR1))
 
+    def test_jvp_torch_compile(self):
+        r"""
+        Regression test for a PyTorch bug: Dynamo silently drops the custom jvp of an autograd Function
+        when torch.func.jvp is applied inside a torch.compile'd function.
+        Uses an input with degenerate singular values, for which the default SVD forward-AD rule
+        returns non-finite values whereas the custom clamped jvp does not.
+        """
+        batch_size = 5
+        d = 3
+        M = torch.eye(d, dtype=self.dtype, device=self.device).expand(batch_size, d, d).clone()
+        dM = torch.randn_like(M)
+
+        def func(M, dM):
+            return torch.func.jvp(roma.special_procrustes, (M,), (dM,))[1]
+
+        dR_eager = func(M, dM)
+        torch._dynamo.reset()
+        dR_compiled = torch.compile(func)(M, dM)
+        self.assertTrue(torch.all(torch.isfinite(dR_compiled)))
+        self.assertTrue(torch.allclose(dR_eager, dR_compiled))
+
 
 if __name__ == "__main__":
     unittest.main()
