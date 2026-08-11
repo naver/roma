@@ -1,13 +1,14 @@
 [build-system]
 requires = [
-    "setuptools>=42",
+    "setuptools>=64",
+    "setuptools_scm>=8",
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "roma"
-version = "1.6"
+dynamic = ["version"]
 description = "A lightweight library to deal with 3D rotations in PyTorch."
 readme = "README.md"
 authors = [{ name = "Romain Brégier", email = "romain.bregier@naverlabs.com" }]
@@ -34,6 +35,8 @@ dev = [
 
 [tool.setuptools]
 packages = ["roma"]
+
+[tool.setuptools_scm]
 
 [tool.ruff]
 line-length = 120

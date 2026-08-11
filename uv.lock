@@ -1585,7 +1585,6 @@ wheels = [
 
 [[package]]
 name = "roma"
-version = "1.6"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "1.24.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
