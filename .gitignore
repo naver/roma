@@ -10,3 +10,4 @@ htmlcov/
 .coverage
 build/
 .venv/
+uv.lock
