@@ -215,6 +215,10 @@ class TestProcrustesForwardDerivatives(unittest.TestCase):
         dR1 = self._jvp_dual(lambda x: roma.special_procrustes(x, regularization=1e-2), M, dM)
         self.assertTrue(torch.all(dR0 == dR1))
 
+    @unittest.skipIf(
+        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
+        "torch.func.jvp under torch.compile is not properly supported in PyTorch < 2.4",
+    )
     def test_jvp_torch_compile(self):
         r"""
         Regression test for a PyTorch bug: Dynamo silently drops the custom jvp of an autograd Function

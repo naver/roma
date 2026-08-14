@@ -12,9 +12,20 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.x"]
-        pytorch-version: ["torch"]
-        
+        include:
+          # Latest PyTorch
+          - python-version: "3.x"
+            pytorch-version: "torch"
+            numpy-version: "numpy"
+          # Oldest supported PyTorch (no torch.amp.custom_fwd, fallback to torch.cuda.amp)
+          - python-version: "3.11"
+            pytorch-version: "torch==2.0.1"
+            numpy-version: "numpy<2"
+          # Last version before torch.amp.custom_fwd was introduced in PyTorch 2.4
+          - python-version: "3.12"
+            pytorch-version: "torch==2.3.1"
+            numpy-version: "numpy<2"
+
     steps:
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -24,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ${{matrix.pytorch-version}} numpy --no-cache-dir
+          pip install "${{matrix.pytorch-version}}" "${{matrix.numpy-version}}" --no-cache-dir
 
       - name: Prepare repo
         uses: actions/checkout@master

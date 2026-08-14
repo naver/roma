@@ -15,8 +15,8 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
     # Explicitely cast inputs to float32 for CPU and CUDA devices when using autocast,
     # as svd is not supported with bfloat16 and float16 on CPU and CUDA devices.
     @staticmethod
-    @torch.amp.custom_fwd(device_type="cpu", cast_inputs=torch.float32)
-    @torch.amp.custom_fwd(device_type="cuda", cast_inputs=torch.float32)
+    @roma.internal.custom_fwd(device_type="cpu", cast_inputs=torch.float32)
+    @roma.internal.custom_fwd(device_type="cuda", cast_inputs=torch.float32)
     def forward(M, force_rotation, regularization, gradient_eps):
         assert M.dim() == 3 and M.shape[1] == M.shape[2], "Input should be a BxDxD batch of matrices."
         # Singular values of D are sorted in descending order

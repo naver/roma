@@ -36,6 +36,38 @@ def _pseudo_inverse(x, eps):
     return torch.where(torch.abs(x) < eps, torch.zeros_like(x), 1.0 / x)
 
 
+# torch.amp.custom_fwd and torch.amp.custom_bwd were added in PyTorch 2.4.
+try:
+    custom_fwd = torch.amp.custom_fwd
+    custom_bwd = torch.amp.custom_bwd
+except AttributeError:
+    try:
+        # PyTorch < 2.4: equivalents exist for CUDA only, and do not support the device_type argument.
+        # Should raise an AttributeError exception if undefined.
+        torch.cuda.amp.custom_fwd
+        torch.cuda.amp.custom_bwd
+
+        def custom_fwd(device_type, **kwargs):
+            if device_type == "cuda":
+                return torch.cuda.amp.custom_fwd(**kwargs)
+            else:
+                # No equivalent for other device types: no-op decorator.
+                return lambda fwd: fwd
+
+        def custom_bwd(device_type, **kwargs):
+            if device_type == "cuda":
+                return torch.cuda.amp.custom_bwd
+            else:
+                return lambda bwd: bwd
+    except AttributeError:
+        # Fallback for older versions: no-op decorators.
+        def custom_fwd(**kwargs):
+            return lambda fwd: fwd
+
+        def custom_bwd(**kwargs):
+            return lambda bwd: bwd
+
+
 def autocast_disabled(device_type):
     r"""
     :meta private:
