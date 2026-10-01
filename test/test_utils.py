@@ -10,6 +10,17 @@ from test.utils import is_close
 
 
 class TestUtils(unittest.TestCase):
+    def test_slerp_long_arc_near_antipodal(self):
+        angles = 2 * np.pi - torch.tensor([1e-3, 1e-4, 1e-6], dtype=torch.float64)
+        axis = torch.nn.functional.normalize(torch.tensor([1.0, -2.0, 3.0], dtype=torch.float64), dim=-1)
+        q0 = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=torch.float64).expand(len(angles), -1)
+        q1 = torch.cat((torch.sin(angles[:, None] / 2) * axis, torch.cos(angles[:, None] / 2)), dim=-1)
+        steps = torch.tensor([0.0, 0.25, 0.5, 0.75, 1.0], dtype=torch.float64)
+        interpolated_angles = steps[:, None, None] * angles[None, :, None]
+        expected = torch.cat((torch.sin(interpolated_angles / 2) * axis, torch.cos(interpolated_angles / 2)), dim=-1)
+        actual = roma.unitquat_slerp(q0, q1, steps, shortest_arc=False)
+        torch.testing.assert_close(actual, expected, atol=1e-10, rtol=1e-10)
+
     def test_flatten(self):
         for dtype in (torch.float32, torch.float64):
             x = torch.randn((32, 24, 3, 4), dtype=dtype)

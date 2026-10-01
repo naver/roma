@@ -11,6 +11,58 @@ device = torch.device(0) if torch.cuda.is_available() else torch.device("cpu")
 
 
 class TestMappings(unittest.TestCase):
+    def test_sinc_real_domain(self):
+        x = torch.tensor(
+            [-7.0, -np.pi - 1e-4, -np.pi + 1e-4, -1.0, -1e-4, 0.0, 1e-4, 1.0, np.pi - 1e-4, np.pi + 1e-4, 7.0],
+            dtype=torch.float64,
+            device=device,
+        )
+        # torch.sinc uses the normalized convention sin(pi*x)/(pi*x).
+        expected = torch.sinc(x / np.pi)
+        torch.testing.assert_close(roma.sinc(x), expected, atol=1e-12, rtol=1e-10)
+        torch.testing.assert_close(roma.inv_sinc(x), 1.0 / expected, atol=1e-10, rtol=1e-10)
+
+    def test_sinc_derivatives(self):
+        x = torch.tensor([-1.0, -1e-4, 0.0, 1e-4, 1.0, np.pi - 1e-3], dtype=torch.float64, device=device)
+        x.requires_grad_()
+        self.assertTrue(torch.autograd.gradcheck(roma.sinc, (x,)))
+        self.assertTrue(torch.autograd.gradcheck(roma.inv_sinc, (x,), eps=1e-7, rtol=1e-4))
+        for function, second_derivative in ((roma.sinc, -1.0 / 3.0), (roma.inv_sinc, 1.0 / 3.0)):
+            zero = torch.zeros((), dtype=torch.float64, device=device, requires_grad=True)
+            first = torch.autograd.grad(function(zero), zero, create_graph=True)[0]
+            second = torch.autograd.grad(first, zero)[0]
+            torch.testing.assert_close(first, torch.zeros_like(first))
+            torch.testing.assert_close(second, torch.full_like(second, second_derivative))
+
+    def test_unitquat_to_rotvec_near_full_turn(self):
+        axis = torch.tensor([[1.0, -2.0, 3.0], [0.0, 0.0, 1.0]], device=device)
+        for dtype in (torch.float32, torch.float64):
+            axes = torch.nn.functional.normalize(axis.to(dtype), dim=-1)
+            angles = 2 * np.pi - torch.tensor([1e-2, 1e-3, 1e-4, 1e-6], dtype=dtype, device=device)
+            # Construct quaternions directly from their axis and angle.
+            vector = torch.sin(angles[:, None, None] / 2) * axes[None]
+            scalar = torch.cos(angles[:, None, None] / 2).expand(-1, len(axes), 1)
+            q = torch.cat((vector, scalar), dim=-1)
+            for shortest_arc in (False, True):
+                with self.subTest(dtype=dtype, shortest_arc=shortest_arc):
+                    expected_angle = angles - 2 * np.pi if shortest_arc else angles
+                    expected = expected_angle[:, None, None] * axes[None]
+                    actual = roma.unitquat_to_rotvec(q, shortest_arc=shortest_arc)
+                    torch.testing.assert_close(
+                        actual, expected, atol=2e-6 if dtype == torch.float32 else 1e-10, rtol=1e-6
+                    )
+                    torch.testing.assert_close(roma.rotvec_to_unitquat(actual), -q if shortest_arc else q)
+
+    def test_unitquat_to_rotvec_near_full_turn_derivative(self):
+        axis = torch.nn.functional.normalize(torch.tensor([1.0, -2.0, 3.0], dtype=torch.float64, device=device), dim=-1)
+        for delta in (1e-3, 1e-4, 1e-6):
+            with self.subTest(delta=delta):
+                angle = torch.tensor(2 * np.pi - delta, dtype=torch.float64, device=device, requires_grad=True)
+                q = torch.cat((torch.sin(angle / 2) * axis, torch.cos(angle / 2).reshape(1)))
+                recovered = roma.unitquat_to_rotvec(q, shortest_arc=False)
+                derivative = torch.autograd.grad((recovered * axis).sum(), angle)[0]
+                torch.testing.assert_close(derivative, torch.ones_like(derivative), atol=1e-7, rtol=1e-7)
+
     def test_orthonormal(self):
         for dtype in (torch.float32, torch.float64):
             M = torch.eye(3, dtype=dtype, device=device).expand(10, 3, 3).contiguous()

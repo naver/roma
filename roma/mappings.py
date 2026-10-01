@@ -281,11 +281,14 @@ def sinc(x, threshold=1e-3):
 
     Args:
         x (... tensor): input values.
+        threshold (float > 0): magnitude below which a Taylor expansion is used.
     Returns:
         batch of sinc values (... tensor).
     """
     mask = torch.abs(x) < threshold
-    return torch.where(mask, 1 - x**2 / 6 + x**4 / 120, torch.sin(x) / x.clamp_min(threshold))
+    # Only replace the denominator in the unused small-angle branch.
+    denominator = torch.where(mask, torch.ones_like(x), x)
+    return torch.where(mask, 1 - x**2 / 6 + x**4 / 120, torch.sin(x) / denominator)
 
 
 def inv_sinc(x, threshold=1e-3):
@@ -294,11 +297,14 @@ def inv_sinc(x, threshold=1e-3):
 
     Args:
         x (... tensor): input values.
+        threshold (float > 0): magnitude below which a Taylor expansion is used.
     Returns:
         batch of inv_sinc values (... tensor).
     """
     mask = torch.abs(x) < threshold
-    return torch.where(mask, 1 + x**2 / 6 + 7 * x**4 / 360, x / torch.sin(x).clamp_min(threshold))
+    # sin(x) can be small outside the Taylor region, e.g. near pi for long arcs.
+    denominator = torch.where(mask, torch.ones_like(x), torch.sin(x))
+    return torch.where(mask, 1 + x**2 / 6 + 7 * x**4 / 360, x / denominator)
 
 
 def rotvec_to_unitquat(rotvec):
