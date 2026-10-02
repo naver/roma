@@ -331,6 +331,24 @@ class TestTransforms(unittest.TestCase):
         self.assertTrue(torch.all(identity_transform4.translation == torch.zeros((D,), dtype=dtype)))
         self.assertTrue(torch.all(identity_transform4.linear == torch.eye(D, dtype=dtype)))
 
+    def test_rectangular_affine_default_translation(self):
+        # Translation belongs to the codomain, including projection and embedding.
+        for batch_shape in ((), (2,), (2, 3)):
+            for output_dim, input_dim in ((2, 3), (3, 2)):
+                shape = batch_shape + (output_dim, input_dim)
+                linear = torch.arange(torch.tensor(shape).prod(), dtype=torch.float64).reshape(shape)
+                transform = Affine(linear, None)
+                self.assertEqual(transform.translation.shape, batch_shape + (output_dim,))
+                points = torch.arange(input_dim, dtype=torch.float64).expand(batch_shape + (input_dim,))
+                expected = (linear @ points[..., None]).squeeze(-1)
+                self.assertTrue(torch.equal(transform.apply(points), expected))
+                homogeneous = transform.to_homogeneous()
+                self.assertEqual(homogeneous.shape, batch_shape + (output_dim + 1, input_dim + 1))
+                extended = torch.cat((points, torch.ones(batch_shape + (1,), dtype=torch.float64)), -1)
+                result = (homogeneous @ extended[..., None]).squeeze(-1)
+                self.assertTrue(torch.equal(result[..., :-1], expected))
+                self.assertTrue(torch.equal(result[..., -1], torch.ones(batch_shape, dtype=torch.float64)))
+
     def test_linear_only(self):
         batch_shape = (2, 3, 6)
         D = 3
