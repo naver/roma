@@ -230,8 +230,7 @@ class RotationUnitQuat(Linear):
         Returns:
             Normalized unit quaternion (...x4 tensor).
         """
-        unitquat = self.linear / torch.norm(self.linear, dim=-1, keepdim=True)
-        return unitquat
+        return roma.utils.quat_normalize(self.linear)
 
 
 class _BaseAffine:
