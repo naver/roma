@@ -65,8 +65,8 @@ def random_unitquat(size=tuple(), dtype=torch.float, device=None, generator=None
         size = (size,)
 
     x0 = torch.rand(size, dtype=dtype, device=device, generator=generator)
-    theta1 = (2.0 * math.pi) * torch.rand(size, dtype=dtype, device=device)
-    theta2 = (2.0 * math.pi) * torch.rand(size, dtype=dtype, device=device)
+    theta1 = (2.0 * math.pi) * torch.rand(size, dtype=dtype, device=device, generator=generator)
+    theta2 = (2.0 * math.pi) * torch.rand(size, dtype=dtype, device=device, generator=generator)
     r1 = torch.sqrt(1.0 - x0)
     r2 = torch.sqrt(x0)
     return torch.stack(
