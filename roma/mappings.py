@@ -275,32 +275,66 @@ def symmatrixvec_to_unitquat(x):
     return roma.internal.unflatten_batch_dims(symmatrix_to_projective_point(A), batch_shape)
 
 
-def sinc(x, threshold=1e-3):
+def _sinc_threshold(x):
+    r"""
+    Default magnitude below which :func:`sinc` and :func:`inv_sinc` switch to their Taylor expansion.
+
+    The forward pass is accurate on both sides of the switch, so the threshold is chosen to minimize
+    the error of the first derivative, where the two branches fail in opposite directions:
+
+    - Taylor branch: the derivative omits a term in :math:`x^5` (:math:`x^5/840` for sinc,
+      :math:`31 x^5/2520` for inv_sinc), i.e. a relative truncation error in :math:`x^4`
+      that grows with :math:`x`.
+    - Closed-form branch: the derivative, :math:`(x \cos(x) - \sin(x)) / x^2` for sinc and
+      :math:`(\sin(x) - x \cos(x)) / \sin(x)^2` for inv_sinc,
+      subtracts two nearly equal numbers of magnitude :math:`x` for :math:`x` small,
+      each with a rounding error of about :math:`\epsilon x`, to obtain a value of
+      only about :math:`\mp x^3/3` (Taylor expansion of :math:`x \cos(x) - \sin(x)`).
+      In both cases this yields a relative error of
+      about :math:`3 \epsilon / x^2` that grows as :math:`x` shrinks.
+
+    The errors cross when :math:`x^6 = 840 \epsilon` for sinc and :math:`x^6 = (2520/31) \epsilon`
+    for inv_sinc. Since both functions share this threshold, we use the smaller crossover,
+    :math:`(2520/31)^{1/6} \epsilon^{1/6} \approx 2 \epsilon^{1/6}`.
+     This gives roughly 5e-3 for float64 and 0.14 for float32.
+    """
+    return 2.0 * torch.finfo(x.dtype).eps ** (1 / 6)
+
+
+def sinc(x, threshold=None):
     r"""
     sinc function :math:`\mathrm{sinc}(x) = \sin(x) / x`.
 
     Args:
         x (... tensor): input values.
-        threshold (float > 0): magnitude below which a Taylor expansion is used.
+        threshold (float > 0 or None): magnitude below which a Taylor expansion is used.
+            If None, a default value depending on the floating point type of ``x`` is used,
+            chosen to minimize the error of the first derivative.
     Returns:
         batch of sinc values (... tensor).
     """
+    if threshold is None:
+        threshold = _sinc_threshold(x)
     mask = torch.abs(x) < threshold
     # Only replace the denominator in the unused small-angle branch.
     denominator = torch.where(mask, torch.ones_like(x), x)
     return torch.where(mask, 1 - x**2 / 6 + x**4 / 120, torch.sin(x) / denominator)
 
 
-def inv_sinc(x, threshold=1e-3):
+def inv_sinc(x, threshold=None):
     r"""
     Inverse of the sinc function :math:`\mathrm{inv\_sinc}(x) = x / \sin(x)`.
 
     Args:
         x (... tensor): input values.
-        threshold (float > 0): magnitude below which a Taylor expansion is used.
+        threshold (float > 0 or None): magnitude below which a Taylor expansion is used.
+            If None, a default value depending on the floating point type of ``x`` is used,
+            chosen to minimize the error of the first derivative.
     Returns:
         batch of inv_sinc values (... tensor).
     """
+    if threshold is None:
+        threshold = _sinc_threshold(x)
     mask = torch.abs(x) < threshold
     # sin(x) can be small outside the Taylor region, e.g. near pi for long arcs.
     denominator = torch.where(mask, torch.ones_like(x), torch.sin(x))
@@ -324,7 +358,7 @@ def rotvec_to_unitquat(rotvec):
     # https://github.com/scipy/scipy/blob/adc4f4f7bab120ccfab9383aba272954a0a12fb0/scipy/spatial/transform/rotation.py#L621
 
     norms = torch.norm(rotvec, dim=-1)
-    scale = sinc(norms / 2, 1e-3) / 2.0
+    scale = sinc(norms / 2) / 2.0
     quat = torch.cat((scale[:, None] * rotvec, torch.cos(norms / 2)[:, None]), dim=-1)
     return roma.internal.unflatten_batch_dims(quat, batch_shape)
 
@@ -359,7 +393,7 @@ def unitquat_to_rotvec(quat, shortest_arc=True):
         sign = (quat[:, 3] > 0).to(quat.dtype) * 2.0 - 1.0
         quat = quat * sign[:, None]
     half_angle = torch.atan2(torch.norm(quat[:, :3], dim=1), quat[:, 3])
-    scale = 2.0 * inv_sinc(half_angle, 1e-3)
+    scale = 2.0 * inv_sinc(half_angle)
     rotvec = scale[:, None] * quat[:, :3]
     return roma.internal.unflatten_batch_dims(rotvec, batch_shape)
 
