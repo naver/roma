@@ -11,15 +11,29 @@ from test.utils import is_close
 
 class TestUtils(unittest.TestCase):
     def test_slerp_long_arc_near_antipodal(self):
-        angles = 2 * np.pi - torch.tensor([1e-3, 1e-4, 1e-6], dtype=torch.float64)
+        # The interpolation arc between nearly antipodal quaternions is intrinsically ill-conditioned:
+        # a perturbation of the inputs of magnitude eps perturbs the arc by eps / sin(omega), omega ~ delta / 2.
         axis = torch.nn.functional.normalize(torch.tensor([1.0, -2.0, 3.0], dtype=torch.float64), dim=-1)
-        q0 = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=torch.float64).expand(len(angles), -1)
-        q1 = torch.cat((torch.sin(angles[:, None] / 2) * axis, torch.cos(angles[:, None] / 2)), dim=-1)
         steps = torch.tensor([0.0, 0.25, 0.5, 0.75, 1.0], dtype=torch.float64)
-        interpolated_angles = steps[:, None, None] * angles[None, :, None]
-        expected = torch.cat((torch.sin(interpolated_angles / 2) * axis, torch.cos(interpolated_angles / 2)), dim=-1)
-        actual = roma.unitquat_slerp(q0, q1, steps, shortest_arc=False)
-        torch.testing.assert_close(actual, expected, atol=1e-10, rtol=1e-10)
+        # Generic rotation applied to both inputs (left invariance), to avoid testing a particular configuration only.
+        q = roma.random_unitquat(dtype=torch.float64)
+        for delta in (1e-3, 1e-4, 1e-6):
+            with self.subTest(delta=delta):
+                angle = torch.tensor([2 * np.pi - delta], dtype=torch.float64)
+                q0 = torch.tensor([[0.0, 0.0, 0.0, 1.0]], dtype=torch.float64)
+                q1 = torch.cat((torch.sin(angle[:, None] / 2) * axis, torch.cos(angle[:, None] / 2)), dim=-1)
+                interpolated_angles = steps[:, None, None] * angle[None, :, None]
+                expected = torch.cat(
+                    (torch.sin(interpolated_angles / 2) * axis, torch.cos(interpolated_angles / 2)), dim=-1
+                )
+                atol = 10 * torch.finfo(torch.float64).eps / delta
+                actual = roma.unitquat_slerp(q0, q1, steps, shortest_arc=False)
+                torch.testing.assert_close(actual, expected, atol=atol, rtol=0.0)
+                actual = roma.unitquat_slerp(
+                    roma.quat_product(q[None], q0), roma.quat_product(q[None], q1), steps, shortest_arc=False
+                )
+                expected = roma.quat_product(q.expand(expected.shape), expected)
+                torch.testing.assert_close(actual, expected, atol=atol, rtol=0.0)
 
     def test_flatten(self):
         for dtype in (torch.float32, torch.float64):
@@ -223,8 +237,7 @@ class TestUtils(unittest.TestCase):
         q = roma.utils.unitquat_slerp(q0, q1, steps, shortest_arc=True)
         self.assertTrue(is_close(q, torch.stack((q0, q05m, -q1))))
 
-    def test_slerp_consistency(self):
-        # Test consistency between both slerp methods.
+    def test_unitquat_slerp_shapes(self):
         for batch_shape in [(3,), (10, 20), (3, 14, 7)]:
             for steps_shape in [(6,), (4, 2), (3, 2, 1)]:
                 for shortest_arc in (True, False):
@@ -232,16 +245,58 @@ class TestUtils(unittest.TestCase):
                     q1 = roma.random_unitquat(batch_shape)
                     steps = torch.rand(steps_shape)
                     q = roma.unitquat_slerp(q0, q1, steps=steps, shortest_arc=shortest_arc)
-                    qbis = roma.unitquat_slerp_fast(q0, q1, steps=steps, shortest_arc=shortest_arc)
                     self.assertTrue(q.shape == steps_shape + batch_shape + (4,))
-                    self.assertTrue(is_close(q, qbis))
-                    # Same tests with nearby rotations
-                    q1 = q0 + 1e-3 * torch.randn_like(q0)
-                    q1 /= torch.norm(q1, dim=-1, keepdim=True)
-                    q = roma.unitquat_slerp(q0, q1, steps=steps, shortest_arc=shortest_arc)
-                    qbis = roma.unitquat_slerp_fast(q0, q1, steps=steps, shortest_arc=shortest_arc)
-                    self.assertTrue(q.shape == steps_shape + batch_shape + (4,))
-                    self.assertTrue(is_close(q, qbis))
+                    self.assertTrue(is_close(torch.linalg.norm(q, dim=-1), torch.ones(steps_shape + batch_shape)))
+
+    def test_unitquat_slerp_fast_deprecated(self):
+        q0 = roma.random_unitquat(5)
+        q1 = roma.random_unitquat(5)
+        steps = torch.rand(3)
+        with self.assertWarns(DeprecationWarning):
+            q = roma.unitquat_slerp_fast(q0, q1, steps)
+        torch.testing.assert_close(q, roma.unitquat_slerp(q0, q1, steps))
+
+    def test_unitquat_slerp_derivatives_degenerate(self):
+        # First and second order derivatives of unitquat_slerp should remain finite
+        # for identical, nearby, and antipodal (with shortest_arc=True) quaternions.
+        # Pitfall: a naive implementation evaluates acos (or a norm) at a singular point,
+        # whose infinite derivative produces NaN gradients even when the result is discarded by a mask.
+        # q0 is chosen such that its squared norm is exactly 1 in floating-point arithmetic.
+        q0 = torch.tensor([0.5, -0.5, 0.5, 0.5], dtype=torch.float64)
+        axis = torch.nn.functional.normalize(torch.tensor([1.0, -2.0, 3.0], dtype=torch.float64), dim=-1)
+        q_nearby = roma.quat_product(q0, roma.rotvec_to_unitquat(1e-4 * axis))
+        steps = torch.tensor([0.0, 0.3, 1.0], dtype=torch.float64)
+        for dtype in (torch.float32, torch.float64):
+            for name, q1 in (("identical", q0), ("nearby", q_nearby), ("antipodal", -q0)):
+                with self.subTest(dtype=dtype, case=name):
+                    inputs = [x.to(dtype).clone().requires_grad_(True) for x in (q0, q1, steps)]
+                    q = roma.unitquat_slerp(*inputs, shortest_arc=True)
+                    self.assertTrue(torch.all(torch.isfinite(q)))
+                    first = torch.autograd.grad(q.sum(), inputs, create_graph=True)
+                    for grad in first:
+                        self.assertTrue(torch.all(torch.isfinite(grad)), "non-finite first derivative")
+                    second = torch.autograd.grad(sum(grad.square().sum() for grad in first), inputs, allow_unused=True)
+                    for grad in second:
+                        self.assertTrue(grad is None or torch.all(torch.isfinite(grad)), "non-finite second derivative")
+
+    def test_unitquat_slerp_gradcheck(self):
+        # Analytical first and second order derivatives of unitquat_slerp should match numerical ones,
+        # for small angles (including a null one) as well as large ones.
+        # Note: finite differences perturb the inputs off the unit sphere, so that |cos(omega)| may slightly exceed 1.
+        q0 = torch.tensor([0.5, -0.5, 0.5, 0.5], dtype=torch.float64)
+        axis = torch.nn.functional.normalize(torch.tensor([1.0, -2.0, 3.0], dtype=torch.float64), dim=-1)
+        # Including extrapolation steps.
+        steps = torch.tensor([-0.5, 0.0, 0.3, 1.0, 1.7], dtype=torch.float64)
+        for angle in (0.0, 1e-4, 1e-2, 1.0, 3.0):
+            with self.subTest(angle=angle):
+                q1 = roma.quat_product(q0, roma.rotvec_to_unitquat(angle * axis))
+                inputs = tuple(x.clone().requires_grad_(True) for x in (q0, q1, steps))
+
+                def func(q0, q1, steps):
+                    return roma.unitquat_slerp(q0, q1, steps, shortest_arc=True)
+
+                self.assertTrue(torch.autograd.gradcheck(func, inputs))
+                self.assertTrue(torch.autograd.gradgradcheck(func, inputs))
 
     def test_composition(self):
         for dtype in (torch.float32, torch.float64):

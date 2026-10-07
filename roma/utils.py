@@ -7,6 +7,7 @@ Various utility functions related to rotation representations.
 
 import torch
 import math
+import warnings
 import roma.internal
 import roma.mappings
 
@@ -367,40 +368,20 @@ def unitquat_slerp(q0, q1, steps, shortest_arc=True):
     Args:
         q0, q1 (Ax4 tensor): batch of unit quaternions (A may contain multiple dimensions).
         steps (tensor of shape B): interpolation steps, 0.0 corresponding to q0 and 1.0 to q1 (B may contain multiple dimensions).
+            Values outside [0,1] result in extrapolation.
         shortest_arc (boolean): if True, interpolation will be performed along the shortest arc on SO(3) from `q0` to `q1` or `-q1`.
     Returns:
-        batch of interpolated quaternions (BxAx4 tensor).
+        batch of interpolated unit quaternions (BxAx4 tensor).
     Note:
         When considering quaternions as rotation representations,
         one should keep in mind that spherical interpolation is not necessarily performed along the shortest arc,
         depending on the sign of ``torch.sum(q0*q1,dim=-1)``.
 
-        Behavior is undefined when using ``shortest_arc=False`` with antipodal quaternions.
-    """
-    # Relative rotation
-    rel_q = quat_product(quat_conjugation(q0), q1)
-    rel_rotvec = roma.mappings.unitquat_to_rotvec(rel_q, shortest_arc=shortest_arc)
-    # Relative rotations to apply
-    rel_rotvecs = steps.reshape(steps.shape + (1,) * rel_rotvec.dim()) * rel_rotvec.reshape(
-        (1,) * steps.dim() + rel_rotvec.shape
-    )
-    rots = roma.mappings.rotvec_to_unitquat(rel_rotvecs.reshape(-1, 3)).reshape(*rel_rotvecs.shape[:-1], 4)
-    interpolated_q = quat_product(q0.reshape((1,) * steps.dim() + q0.shape).repeat(steps.shape + (1,) * q0.dim()), rots)
-    return interpolated_q
+        With ``shortest_arc=False``, the interpolation arc is not uniquely defined for antipodal quaternions (``q1 = -q0``),
+        and the output is undefined in that case.
+        For nearly antipodal quaternions, the arc is uniquely defined but highly sensitive to the inputs.
 
-
-def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
-    r"""
-    Spherical linear interpolation between two unit quaternions.
-    This function requires less computations than :func:`roma.utils.unitquat_slerp`,
-    but is **unsuitable for extrapolation (i.e.** ``steps`` **must be within [0,1])**.
-
-    Args:
-        q0, q1 (Ax4 tensor): batch of unit quaternions (A may contain multiple dimensions).
-        steps (tensor of shape B): interpolation steps within 0.0 and 1.0, 0.0 corresponding to q0 and 1.0 to q1 (B may contain multiple dimensions).
-        shortest_arc (boolean): if True, interpolation will be performed along the shortest arc on SO(3) from `q0` to `q1` or `-q1`.
-    Returns:
-        batch of interpolated quaternions (BxAx4 tensor).
+        First and second order derivatives are well-defined for all inputs, including identical quaternions.
     """
     q0, batch_shape = roma.internal.flatten_batch_dims(q0, end_dim=-2)
     q1, batch_shape1 = roma.internal.flatten_batch_dims(q1, end_dim=-2)
@@ -412,23 +393,45 @@ def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
         q1 = q1.clone()
         q1[cos_omega < 0, :] *= -1
         cos_omega = torch.abs(cos_omega)
-    # True when q0 and q1 are close.
-    nearby_quaternions = cos_omega > (1.0 - 1e-3)
+    # sin(omega) is computed as the norm of the component of q1 orthogonal to q0,
+    # so that omega = atan2(sin, cos) remains accurate for small angles (unlike acos(cos_omega)).
+    rejection = q1 - cos_omega[..., None] * q0
+    # The norm is not differentiable at 0, i.e. for identical quaternions, where linear interpolation is used instead.
+    # Below this threshold, linear interpolation is indistinguishable from spherical interpolation at machine precision.
+    threshold = math.sqrt(torch.finfo(q0.dtype).eps)
+    # (Only for nearby quaternions, and not for nearly antipodal ones when shortest_arc=False.)
+    nearby_quaternions = torch.logical_and(torch.sum(rejection**2, dim=-1) < threshold**2, cos_omega > 0)
+    # Evaluate the discarded branch at a safe point to avoid NaN gradients.
+    rejection = torch.where(nearby_quaternions[..., None], torch.ones_like(rejection), rejection)
+    sin_omega = torch.linalg.norm(rejection, dim=-1)
+    omega = torch.atan2(sin_omega, cos_omega)
 
-    cos_omega = cos_omega.reshape((1,) * steps.dim() + (-1, 1))
+    shape = (1,) * steps.dim() + (-1, 1)
+    omega = omega.reshape(shape)
+    sin_omega = sin_omega.reshape(shape)
+    nearby_quaternions = nearby_quaternions.reshape(shape)
     s = steps.reshape(steps.shape + (1, 1))
-    # General approach
-    omega = torch.acos(cos_omega)
-    alpha = torch.sin((1 - s) * omega)
-    beta = torch.sin(s * omega)
-    # Use linear interpolation for nearby quaternions
-    alpha[..., nearby_quaternions, :] = 1 - s
-    beta[..., nearby_quaternions, :] = s
+    # Slerp coefficients sin((1-s) omega) / sin(omega) and sin(s omega) / sin(omega).
+    # Division is safe: sin_omega is 1 for nearby quaternions and larger than the threshold otherwise.
+    alpha = torch.where(nearby_quaternions, 1.0 - s, torch.sin((1.0 - s) * omega) / sin_omega)
+    beta = torch.where(nearby_quaternions, s, torch.sin(s * omega) / sin_omega)
     # Interpolation
     q = alpha * q0.reshape((1,) * steps.dim() + q0.shape) + beta * q1.reshape((1,) * steps.dim() + q1.shape)
     # Normalization of the output
     q = quat_normalize(q)
     return q.reshape(steps.shape + batch_shape + (4,))
+
+
+def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
+    r"""
+    Deprecated alias of :func:`~roma.utils.unitquat_slerp`, which now uses the same implementation.
+    """
+    warnings.warn(
+        "unitquat_slerp_fast is deprecated and will be removed in a future release. Use unitquat_slerp instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return unitquat_slerp(q0, q1, steps, shortest_arc=shortest_arc)
 
 
 def rotvec_slerp(rotvec0, rotvec1, steps):

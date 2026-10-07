@@ -228,6 +228,10 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Unreleased:
+    - Rewrote :func:`~roma.utils.unitquat_slerp()` with a faster and more accurate formulation, with well-defined first and second order derivatives for all inputs (including identical quaternions). :func:`~roma.utils.rotvec_slerp()` and :func:`~roma.utils.rotmat_slerp()` benefit from these changes.
+    - :func:`~roma.utils.unitquat_slerp_fast()` is now a deprecated alias of :func:`~roma.utils.unitquat_slerp()`.
+    - Fixed :func:`~roma.mappings.sinc()` for negative inputs and :func:`~roma.mappings.inv_sinc()` for inputs with a small or negative sine (e.g. angles close to :math:`\pi`), which were previously affected by a clamping of the denominator. This restores accurate long-arc interpolation in :func:`~roma.utils.unitquat_slerp()`.
 Version 1.6.1:
     - Minor compatibility fix for torch < 2.4
 Version 1.6:
