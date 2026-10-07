@@ -417,8 +417,13 @@ def unitquat_slerp_fast(q0, q1, steps, shortest_arc=True):
 
     cos_omega = cos_omega.reshape((1,) * steps.dim() + (-1, 1))
     s = steps.reshape(steps.shape + (1, 1))
-    # General approach
-    omega = torch.acos(cos_omega)
+    # Keep the unused angular branch away from acos' endpoint derivatives.
+    safe_cos_omega = torch.where(
+        nearby_quaternions.reshape((1,) * steps.dim() + (-1, 1)),
+        torch.zeros_like(cos_omega),
+        cos_omega,
+    )
+    omega = torch.acos(safe_cos_omega)
     alpha = torch.sin((1 - s) * omega)
     beta = torch.sin(s * omega)
     # Use linear interpolation for nearby quaternions
