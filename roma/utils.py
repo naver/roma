@@ -490,10 +490,11 @@ def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
         # Normalize weights
         weights = weights / torch.sum(weights, dim=-1, keepdim=True)
         M = torch.einsum("...k, ...ki, ...kj -> ...ij", weights, y, x)
+    R = roma.special_procrustes(M)
     if compute_scaling:
-        R, DS = roma.special_procrustes(M, return_singular_values=True)
-        # Using notations from (Umeyema, IEEE TPAMI 1991).
-        DS_trace = torch.sum(DS, dim=-1)
+        # Using notations from (Umeyema, IEEE TPAMI 1991): tr(DS) = tr(R^T M),
+        # which avoids requesting the singular values (and the slower SVD-based solver in 3D).
+        DS_trace = torch.sum(R * M, dim=(-2, -1))
         if weights is None:
             sigma2_x = torch.mean(torch.sum(torch.square(x), dim=-1), dim=-1)
         else:
@@ -501,7 +502,6 @@ def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
         scale = DS_trace / sigma2_x
         return R, scale
     else:
-        R = roma.special_procrustes(M)
         return R
 
 

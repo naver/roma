@@ -109,6 +109,114 @@ class TestMappings(unittest.TestCase):
                 Rter = roma.special_procrustes_naive(M)
                 self.assertTrue(is_close(R, Rter))
 
+    def test_special_procrustes_degenerate(self):
+        """
+        Inputs for which the nearest rotation is not unique or is ill-conditioned (closed-form 3D solution).
+        """
+        torch.manual_seed(666)
+        batch_size = 100
+        for dtype in (torch.float32, torch.float64):
+            R0 = roma.random_rotmat(batch_size, dtype=dtype, device=device)
+            scales = torch.logspace(-3, 3, batch_size, dtype=dtype, device=device)[:, None, None]
+            signed_permutation = torch.tensor(
+                [[0.0, -1.0, 0.0], [0.0, 0.0, 1.0], [-1.0, 0.0, 0.0]], dtype=dtype, device=device
+            )
+            cases = {
+                "zero": torch.zeros((batch_size, 3, 3), dtype=dtype, device=device),
+                "reflection": R0 * torch.tensor([1.0, 1.0, -1.0], dtype=dtype, device=device),
+                "rank-1": R0 * torch.tensor([1.0, 0.0, 0.0], dtype=dtype, device=device),
+                "rank-2": R0 * torch.tensor([1.0, 1.0, 0.0], dtype=dtype, device=device),
+                "ambiguous": R0 * torch.tensor([1.0, 0.5, -0.5], dtype=dtype, device=device),
+                "nearly ambiguous": R0 * torch.tensor([1.0, 0.5, -0.5 + 1e-3], dtype=dtype, device=device),
+                "tiny": 1e-30 * R0,
+                "huge": 1e30 * R0,
+                # Isotropic inputs: M^T M is exactly proportional to the identity.
+                "scaled identity": scales * torch.eye(3, dtype=dtype, device=device),
+                "axis aligned": scales * signed_permutation,
+            }
+            for name, M in cases.items():
+                R = roma.special_procrustes(M)
+                self.assertTrue(torch.all(torch.isfinite(R)), name)
+                self.assertTrue(roma.is_rotation_matrix(R, 1e-5), name)
+                # Optimality: tr(R^T M) should be as large as with the SVD-based solution (in float64).
+                Rref = roma.special_procrustes_naive(M.double())
+                objective = torch.sum(R.double() * M.double(), dim=(-1, -2))
+                objective_ref = torch.sum(Rref * M.double(), dim=(-1, -2))
+                scale = torch.linalg.matrix_norm(M.double()).clamp_min(1e-300)
+                self.assertTrue(torch.all((objective_ref - objective) / scale < 1e-6), name)
+                # Finite gradients (backward and forward mode)
+                M = M.requires_grad_()
+                R = roma.special_procrustes(M)
+                torch.sum(R * torch.randn_like(R)).backward()
+                self.assertTrue(torch.all(torch.isfinite(M.grad)))
+                _, dR = torch.func.jvp(roma.special_procrustes, (M.detach(),), (torch.randn_like(M),))
+                self.assertTrue(torch.all(torch.isfinite(dR)))
+            # Zero input: identity output.
+            self.assertTrue(
+                torch.allclose(roma.special_procrustes(cases["zero"]), torch.eye(3, dtype=dtype, device=device))
+            )
+
+    def test_procrustes_rejects_integer_input(self):
+        for d in (3, 4):
+            M = torch.eye(d, dtype=torch.int64, device=device)[None]
+            for force_rotation in (False, True):
+                with self.assertRaises(AssertionError):
+                    roma.procrustes(M, force_rotation=force_rotation)
+
+    def test_special_procrustes_vs_symmatrix(self):
+        """
+        The 3D closed-form solution relies on Horn's symmetric matrix N(M), whose top eigenvector is the quaternion of the
+        nearest rotation: roma.symmatrix_to_projective_point(-N(M)) should therefore give the same rotation.
+        """
+        torch.manual_seed(666)
+        M = torch.randn((100, 3, 3), dtype=torch.float64, device=device)
+        N = roma.mappings._horn_matrix(M)
+        quat = roma.symmatrix_to_projective_point(-N)
+        R = roma.unitquat_to_rotmat(quat)
+        self.assertTrue(is_close(R, roma.special_procrustes(M), eps2=1e-10))
+        # Horn's identity: tr(R^T M) = q^T N(M) q.
+        q = roma.random_unitquat(100, dtype=torch.float64, device=device)
+        lhs = torch.sum(roma.unitquat_to_rotmat(q) * M, dim=(-1, -2))
+        rhs = torch.einsum("bi,bij,bj->b", q, N, q)
+        self.assertTrue(torch.allclose(lhs, rhs))
+
+    def test_procrustes_method(self):
+        torch.manual_seed(666)
+        for dtype in (torch.float32, torch.float64):
+            M = torch.randn((10, 3, 3), dtype=dtype, device=device)
+            R_auto = roma.special_procrustes(M)
+            R_svd = roma.special_procrustes(M, method="svd")
+            R_horn = roma.special_procrustes(M, method="horn")
+            self.assertTrue(is_close(R_auto, R_svd))
+            self.assertTrue(torch.equal(R_auto, R_horn))
+            self.assertTrue(torch.equal(roma.procrustes(M, force_rotation=True, method="horn"), R_horn))
+            # Singular values are only available with the SVD.
+            R, DS = roma.special_procrustes(M, return_singular_values=True, method="svd")
+            self.assertTrue(is_close(R, R_svd))
+            with self.assertRaises(ValueError):
+                roma.special_procrustes(M, return_singular_values=True, method="horn")
+            # Horn's method only applies to 3D rotations.
+            with self.assertRaises(ValueError):
+                roma.procrustes(M, force_rotation=False, method="horn")
+            with self.assertRaises(ValueError):
+                roma.special_procrustes(torch.randn((10, 4, 4), dtype=dtype, device=device), method="horn")
+            with self.assertRaises(ValueError):
+                roma.special_procrustes(M, method="foo")
+            # Gradients should be available with both methods.
+            for method in ("svd", "horn"):
+                Mg = M.clone().requires_grad_()
+                torch.sum(roma.special_procrustes(Mg, method=method)).backward()
+                self.assertTrue(torch.all(torch.isfinite(Mg.grad)))
+
+    def test_special_procrustes_other_dimensions(self):
+        torch.manual_seed(666)
+        for d in (2, 4):
+            for dtype in (torch.float32, torch.float64):
+                M = torch.randn((10, d, d), dtype=dtype, device=device)
+                R = roma.special_procrustes(M)
+                self.assertTrue(roma.is_rotation_matrix(R, 1e-5))
+                self.assertTrue(is_close(R, roma.special_procrustes_naive(M)))
+
     def test_special_gramschmidt(self):
         torch.manual_seed(666)
         for dtype in (torch.float32, torch.float64):
@@ -203,8 +311,6 @@ class TestMappings(unittest.TestCase):
     def test_symmatrix_to_unitquat(self):
         torch.manual_seed(668)
         batch_size = 100
-        # Remark: the eigenvalue decomposition may fail using float32 or depending on the random seed,
-        # due to conditionning issues.
         for dtype in (torch.float32, torch.float64):
             x = torch.randn((batch_size, 10), dtype=dtype, device=device)
             q = roma.symmatrixvec_to_unitquat(x)
@@ -219,6 +325,116 @@ class TestMappings(unittest.TestCase):
             # Ensure that the output is a unit quaternion.
             self.assertEqual(q.shape, (batch_size, 4))
             self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1) < 1e-6))
+
+    @staticmethod
+    def _symmatrix_from_vec(x):
+        x00, x10, x20, x30, x11, x21, x31, x22, x32, x33 = x.unbind(dim=-1)
+        # fmt: off
+        return torch.stack((x00, x10, x20, x30,
+                            x10, x11, x21, x31,
+                            x20, x21, x22, x32,
+                            x30, x31, x32, x33), dim=-1).reshape(-1, 4, 4)
+        # fmt: on
+
+    @staticmethod
+    def _align_sign(q, ref):
+        """Flip the sign of the unit vectors q to match ref (projective points)."""
+        return q * torch.sign(torch.sum(q * ref, dim=-1, keepdim=True))
+
+    def test_symmatrix_vs_eigh(self):
+        """
+        The closed-form eigenvector should match a batched eigendecomposition.
+        """
+        torch.manual_seed(666)
+        batch_size = 100
+        # Non symmetric input: only the lower triangular part should be considered.
+        A = torch.randn((batch_size, 4, 4), dtype=torch.float64, device=device)
+        q_ref = torch.linalg.eigh(A, UPLO="L")[1][..., 0]
+        q = roma.symmatrix_to_projective_point(A)
+        self.assertTrue(torch.all(torch.norm(self._align_sign(q, q_ref) - q_ref, dim=-1) < 1e-10))
+        # Single precision input: computations are performed in double precision internally.
+        A = (A + A.transpose(-1, -2)).to(torch.float32)
+        q_ref = torch.linalg.eigh(A.double())[1][..., 0]
+        q = roma.symmatrix_to_projective_point(A)
+        self.assertEqual(q.dtype, torch.float32)
+        self.assertTrue(torch.all(torch.norm(self._align_sign(q.double(), q_ref) - q_ref, dim=-1) < 1e-6))
+
+    def test_symmatrix_method(self):
+        torch.manual_seed(666)
+        batch_size = 100
+        x = torch.randn((batch_size, 10), dtype=torch.float64, device=device)
+        q_auto = roma.symmatrixvec_to_unitquat(x)
+        q_eigh = roma.symmatrixvec_to_unitquat(x, method="eigh")
+        q_horn = roma.symmatrixvec_to_unitquat(x, method="horn")
+        self.assertTrue(torch.equal(q_auto, q_horn))
+        self.assertTrue(torch.all(torch.norm(self._align_sign(q_eigh, q_horn) - q_horn, dim=-1) < 1e-10))
+        A = self._symmatrix_from_vec(x)
+        self.assertTrue(torch.equal(roma.symmatrix_to_projective_point(A, method="horn"), q_horn))
+        self.assertTrue(torch.equal(roma.symmatrix_to_projective_point(A, method="eigh"), q_eigh))
+        with self.assertRaises(ValueError):
+            roma.symmatrix_to_projective_point(A, method="foo")
+        # Gradients should be available with both methods.
+        for method in ("eigh", "horn"):
+            xg = x.clone().requires_grad_()
+            torch.sum(roma.symmatrixvec_to_unitquat(xg, method=method)).backward()
+            self.assertTrue(torch.all(torch.isfinite(xg.grad)))
+
+    def test_symmatrix_derivatives(self):
+        torch.manual_seed(666)
+        batch_size = 20
+        x = torch.randn((batch_size, 10), dtype=torch.float64, device=device, requires_grad=True)
+        # Backward and forward-mode derivatives should match those of a batched eigendecomposition, where well-defined.
+        q = roma.symmatrixvec_to_unitquat(x)
+        q_ref = torch.linalg.eigh(self._symmatrix_from_vec(x))[1][..., 0]
+        sign = torch.sign(torch.sum(q * q_ref, dim=-1, keepdim=True)).detach()
+        grad_output = torch.randn_like(q)
+        (grad,) = torch.autograd.grad(torch.sum(q * grad_output), x)
+        (grad_ref,) = torch.autograd.grad(torch.sum(sign * q_ref * grad_output), x)
+        self.assertTrue(torch.allclose(grad, grad_ref, atol=1e-6))
+        dx = torch.randn_like(x)
+        _, dq = torch.func.jvp(roma.symmatrixvec_to_unitquat, (x.detach(),), (dx,))
+        _, dq_ref = torch.func.jvp(
+            lambda x: torch.linalg.eigh(self._symmatrix_from_vec(x))[1][..., 0], (x.detach(),), (dx,)
+        )
+        self.assertTrue(torch.allclose(dq, sign * dq_ref, atol=1e-6))
+        # Numerical check of the derivatives.
+        x = torch.randn((5, 10), dtype=torch.float64, device=device, requires_grad=True)
+        self.assertTrue(
+            torch.autograd.gradcheck(roma.symmatrixvec_to_unitquat, (x,), eps=1e-7, atol=1e-5, check_forward_ad=True)
+        )
+
+    def test_symmatrix_degenerate(self):
+        """
+        Inputs for which the smallest eigenvalue is repeated or nearly repeated, or of extreme scale.
+        """
+        torch.manual_seed(666)
+        batch_size = 100
+        Q = torch.linalg.qr(torch.randn((batch_size, 4, 4), dtype=torch.float64, device=device))[0]
+        cases = {
+            "identity": (1.0, 1.0, 1.0, 1.0),
+            "double": (0.0, 0.0, 1.0, 2.0),
+            "triple": (0.0, 0.0, 0.0, 1.0),
+            "nearly double": (0.0, 1e-9, 1.0, 2.0),
+            "huge": (1e30, 2e30, 3e30, 4e30),
+            "tiny": (1e-30, 2e-30, 3e-30, 4e-30),
+        }
+        for name, eigenvalues in cases.items():
+            eigenvalues = torch.tensor(eigenvalues, dtype=torch.float64, device=device)
+            A0 = (Q * eigenvalues) @ Q.transpose(-1, -2)
+            for dtype in (torch.float32, torch.float64):
+                A = A0.to(dtype).requires_grad_()
+                q = roma.symmatrix_to_projective_point(A)
+                self.assertTrue(torch.all(torch.isfinite(q)), name)
+                self.assertTrue(torch.all(torch.abs(torch.norm(q, dim=-1) - 1) < 1e-6), name)
+                # Optimality: q^T A q should be equal to the smallest eigenvalue (relatively to the scale of A).
+                objective = torch.einsum("bi,bij,bj->b", q.double(), A.double(), q.double())
+                scale = torch.linalg.matrix_norm(A.double())
+                self.assertTrue(torch.all((objective - eigenvalues[0]) / scale < 1e-6), name)
+                # Finite gradients (backward and forward mode).
+                torch.sum(q * torch.randn_like(q)).backward()
+                self.assertTrue(torch.all(torch.isfinite(A.grad)), name)
+                _, dq = torch.func.jvp(roma.symmatrix_to_projective_point, (A.detach(),), (torch.randn_like(A),))
+                self.assertTrue(torch.all(torch.isfinite(dq)), name)
 
     def test_rotvec_rotmat_nan_issues(self):
         # Check that casting rotation vectors to rotation matrices does not lead to non finite values with 0 angles.

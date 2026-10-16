@@ -31,9 +31,9 @@ def unflatten_batch_dims(tensor, batch_shape):
 def _pseudo_inverse(x, eps):
     r"""
     :meta private:
-    Element-wise pseudo inverse.
+    Element-wise damped pseudo-inverse x / (x^2 + eps^2), a smooth approximation of 1 / x bounded by 1 / (2 eps).
     """
-    return torch.where(torch.abs(x) < eps, torch.zeros_like(x), 1.0 / x)
+    return x / (x * x + eps * eps)
 
 
 # torch.amp.custom_fwd and torch.amp.custom_bwd were added in PyTorch 2.4.
@@ -66,6 +66,20 @@ except AttributeError:
 
         def custom_bwd(**kwargs):
             return lambda bwd: bwd
+
+
+def autocast_enabled(device_type):
+    r"""
+    :meta private:
+    Whether autocast is enabled for the considered device type (CPU or CUDA only, consistently with custom_fwd).
+    """
+    if device_type not in ("cpu", "cuda"):
+        return False
+    try:
+        return torch.is_autocast_enabled(device_type)
+    except TypeError:
+        # PyTorch < 2.4: no device_type argument.
+        return torch.is_autocast_cpu_enabled() if device_type == "cpu" else torch.is_autocast_enabled()
 
 
 def autocast_disabled(device_type):
