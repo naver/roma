@@ -349,7 +349,7 @@ class Affine(_BaseAffine, Linear):
     def __init__(self, linear, translation):
         if translation is None:
             # Set a default null translation.
-            translation = torch.zeros(linear.shape[:-2] + (linear.shape[-1],), dtype=linear.dtype, device=linear.device)
+            translation = torch.zeros(linear.shape[:-2] + (linear.shape[-2],), dtype=linear.dtype, device=linear.device)
         assert translation.shape[-1] == linear.shape[-2], "Incompatible linear and translation dimensions."
         assert len(linear.shape[:-2]) == len(translation.shape[:-1]), "Batch dimensions should be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
