@@ -130,6 +130,34 @@ class TestUtils(unittest.TestCase):
                     count_difference = torch.sum(torch.sign(torch.sum(axis * q, dim=-1)))
                     self.assertTrue(torch.abs(count_difference) < 10.0 * np.sqrt(size))
 
+    def test_quaternion_product_broadcast(self):
+        # Compare against independent scalar Hamilton-product equations.
+        for pshape, qshape in (((), (2,)), ((2,), ()), ((2, 1), (3,)), ((1,), (2, 3))):
+            p = torch.randn(pshape + (4,), dtype=torch.float64, requires_grad=True)
+            q = torch.randn(qshape + (4,), dtype=torch.float64, requires_grad=True)
+            pb, qb = torch.broadcast_tensors(p, q)
+            px, py, pz, pw = pb.unbind(-1)
+            qx, qy, qz, qw = qb.unbind(-1)
+            expected = torch.stack(
+                (
+                    pw * qx + px * qw + py * qz - pz * qy,
+                    pw * qy - px * qz + py * qw + pz * qx,
+                    pw * qz + px * qy - py * qx + pz * qw,
+                    pw * qw - px * qx - py * qy - pz * qz,
+                ),
+                dim=-1,
+            )
+            actual = roma.quat_product(p, q)
+            self.assertTrue(torch.allclose(actual, expected))
+            self.assertTrue(torch.autograd.gradcheck(roma.quat_product, (p, q)))
+
+    def test_quaternion_action_broadcast(self):
+        q = roma.rotvec_to_unitquat(torch.tensor([0.3, -0.2, 0.7], dtype=torch.float64))
+        v = torch.arange(18, dtype=torch.float64).reshape(2, 3, 3)
+        expected = v @ roma.unitquat_to_rotmat(q).T
+        self.assertTrue(torch.allclose(roma.quat_action(q, v), expected))
+        self.assertTrue(torch.allclose(roma.RotationUnitQuat(q).apply(v), expected))
+
     def test_unitquat(self):
         batch_size = 100
         for dtype in (torch.float32, torch.float64):
