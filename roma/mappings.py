@@ -187,6 +187,7 @@ def procrustes_naive(M, force_rotation: bool = False, return_singular_values: bo
         if force_rotation:
             DS[flip, -1] *= -1
         del D
+        DS = roma.internal.unflatten_batch_dims(DS, batch_shape)
         return R, DS
 
 
