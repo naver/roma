@@ -241,6 +241,19 @@ class TestMappings(unittest.TestCase):
                 self.assertTrue(roma.is_rotation_matrix(R, 1e-5))
                 self.assertTrue(is_close(R, roma.special_procrustes_naive(M)))
 
+    def test_procrustes_naive_singular_values_shape(self):
+        torch.manual_seed(666)
+        # Compare with procrustes for zero, one and two batch dimensions.
+        for batch_shape in ((), (10,), (2, 5)):
+            M = torch.randn(batch_shape + (3, 3), dtype=torch.float64, device=device)
+            for force_rotation in (False, True):
+                R, DS = roma.procrustes(M, force_rotation=force_rotation, return_singular_values=True)
+                Rbis, DSbis = roma.procrustes_naive(M, force_rotation=force_rotation, return_singular_values=True)
+                self.assertEqual(Rbis.shape, batch_shape + (3, 3))
+                self.assertEqual(DSbis.shape, batch_shape + (3,))
+                self.assertTrue(is_close(R, Rbis))
+                self.assertTrue(is_close(DS, DSbis))
+
     def test_special_gramschmidt(self):
         torch.manual_seed(666)
         for dtype in (torch.float32, torch.float64):
