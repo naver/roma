@@ -371,13 +371,13 @@ class TestMappings(unittest.TestCase):
         """
         torch.manual_seed(666)
         batch_size = 100
-        # Non symmetric input: only the lower triangular part should be considered.
         A = torch.randn((batch_size, 4, 4), dtype=torch.float64, device=device)
-        q_ref = torch.linalg.eigh(A, UPLO="L")[1][..., 0]
+        A = A + A.transpose(-1, -2)
+        q_ref = torch.linalg.eigh(A)[1][..., 0]
         q = roma.symmatrix_to_projective_point(A)
         self.assertTrue(torch.all(torch.norm(self._align_sign(q, q_ref) - q_ref, dim=-1) < 1e-10))
         # Single precision input: computations are performed in double precision internally.
-        A = (A + A.transpose(-1, -2)).to(torch.float32)
+        A = A.to(torch.float32)
         q_ref = torch.linalg.eigh(A.double())[1][..., 0]
         q = roma.symmatrix_to_projective_point(A)
         self.assertEqual(q.dtype, torch.float32)
@@ -402,6 +402,32 @@ class TestMappings(unittest.TestCase):
             xg = x.clone().requires_grad_()
             torch.sum(roma.symmatrixvec_to_unitquat(xg, method=method)).backward()
             self.assertTrue(torch.all(torch.isfinite(xg.grad)))
+
+    def test_symmatrix_non_symmetric_input(self):
+        """
+        For a non-symmetric input, "eigh" only considers the lower triangular part and "horn" the symmetric part,
+        and the gradient with respect to the input is symmetric with both methods.
+        """
+        torch.manual_seed(666)
+        batch_size = 100
+        A = torch.randn((batch_size, 4, 4), dtype=torch.float64, device=device)
+        lower = torch.tril(A) + torch.tril(A, -1).transpose(-1, -2)
+        sym = (A + A.transpose(-1, -2)) / 2
+        for method, A_ref in (("eigh", lower), ("horn", sym)):
+            q = roma.symmatrix_to_projective_point(A, method=method)
+            q_ref = torch.linalg.eigh(A_ref)[1][..., 0]
+            self.assertTrue(torch.all(torch.norm(self._align_sign(q, q_ref) - q_ref, dim=-1) < 1e-10))
+        # On symmetric inputs, both methods have the same symmetric gradient (up to the damping of "horn").
+        G = torch.randn((batch_size, 4, 4), dtype=torch.float64, device=device)
+        grads = []
+        for method in ("eigh", "horn"):
+            Ag = sym.clone().requires_grad_()
+            q = roma.symmatrix_to_projective_point(Ag, method=method)
+            # Loss defined on q q^T, as q is defined up to sign.
+            torch.sum(G * q[..., :, None] * q[..., None, :]).backward()
+            self.assertTrue(torch.allclose(Ag.grad, Ag.grad.transpose(-1, -2), atol=1e-12))
+            grads.append(Ag.grad)
+        self.assertTrue(torch.allclose(grads[0], grads[1], atol=1e-6))
 
     def test_symmatrix_derivatives(self):
         torch.manual_seed(666)

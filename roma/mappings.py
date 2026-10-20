@@ -581,10 +581,11 @@ def symmatrix_to_projective_point(A, gradient_eps=1e-5, method: str = "auto"):
     r"""
     Converts a 4x4 symmetric matrix A into a projective point represented by a unit vector :math:`q` minimizing :math:`q^T A q`,
     i.e. a unit eigenvector of A associated to its smallest eigenvalue.
-    Only the lower part of the matrix is considered in practice.
 
     Args:
-        A (...x4x4 tensor): batch of symmetric matrices. Only the lower triangular part is considered.
+        A (...x4x4 tensor): batch of symmetric matrices. Symmetry is assumed but not checked: for a non-symmetric input,
+            the result depends on the method (``"eigh"`` only considers its lower triangular part, ``"horn"`` its symmetric part
+            :math:`(A + A^T) / 2`). With both methods, the gradient with respect to A is symmetric.
         gradient_eps (float > 0): damping of the derivative when the solution is ill-conditioned (``method="horn"`` only).
             The derivative involves the inverse of the gaps :math:`c` between the smallest eigenvalue of :math:`A` and the other ones,
             which vanish when the solution is not unique:
@@ -623,12 +624,10 @@ def symmatrix_to_projective_point(A, gradient_eps=1e-5, method: str = "auto"):
     elif method == "horn":
         if not _supports_float64(A.device):
             raise ValueError("method='horn' requires float64 support, which is not available on this device.")
-        # Symmetric matrix S built from the lower triangular part of A, written as -N(M) + c I for some 3x3 matrix M
-        # (see _horn_matrix_adjoint, which annihilates the identity component). The eigenvector associated to the
-        # smallest eigenvalue of S is the one associated to the largest eigenvalue of N(M).
-        L = torch.tril(A.double())
-        S = L + torch.tril(L, -1).transpose(-1, -2)
-        M = -_horn_matrix_adjoint(S) / 4
+        # A written as -N(M) + c I for some 3x3 matrix M (see _horn_matrix_adjoint, which only depends on the symmetric part
+        # of its input and annihilates the identity component, so that the gradient with respect to A is symmetric).
+        # The eigenvector associated to the smallest eigenvalue of A is the one associated to the largest eigenvalue of N(M).
+        M = -_horn_matrix_adjoint(A.double()) / 4
         q = _horn_eigenvector_apply(M, gradient_eps).to(A.dtype)
     else:
         raise ValueError(f"Unknown method '{method}', expected 'auto', 'eigh' or 'horn'.")

@@ -8,7 +8,7 @@ Benchmark of the two methods available for 3x3 rotations:
 - roma.symmatrix_to_projective_point: batched eigendecomposition (method="eigh") vs closed-form Horn solution (method="horn").
 
 Reports the median execution time of the forward pass, of the forward+backward passes and of forward-mode differentiation (jvp),
-as well as the maximum angular deviation of each method from a float64 SVD/eigh reference.
+as well as the accuracy of the output and of the gradient of each method with respect to a float64 SVD/eigh reference.
 """
 
 import time
@@ -52,56 +52,75 @@ def random_symmatrix(n, dtype):
     return A + A.transpose(-1, -2)
 
 
-# name: (input generator, function of the method, methods (reference first), angular distance)
 benchmarks = {
-    "special_procrustes": (
-        random_matrix,
-        lambda method: lambda M: roma.special_procrustes(M, method=method),
-        ("svd", "horn"),
-        roma.rotmat_geodesic_distance,
+    "special_procrustes": dict(
+        generate=random_matrix,
+        function=lambda method: lambda M: roma.special_procrustes(M, method=method),
+        methods=("svd", "horn"),  # Reference first.
+        distance=roma.rotmat_geodesic_distance,
+        invariant=lambda R: R,
     ),
-    "symmatrix_to_projective_point": (
-        random_symmatrix,
-        lambda method: lambda A: roma.symmatrix_to_projective_point(A, method=method),
-        ("eigh", "horn"),
+    "symmatrix_to_projective_point": dict(
+        generate=random_symmatrix,
+        function=lambda method: lambda A: roma.symmatrix_to_projective_point(A, method=method),
+        methods=("eigh", "horn"),
         # Unit vectors are defined up to sign, as unit quaternions.
-        roma.unitquat_geodesic_distance,
+        distance=roma.unitquat_geodesic_distance,
+        # Sign-invariant quantity on which the loss is defined for gradient accuracy.
+        invariant=lambda q: q[..., :, None] * q[..., None, :],
     ),
 }
 
-for name, (generate, function, methods, distance) in benchmarks.items():
+for name, b in benchmarks.items():
+    function, methods = b["function"], b["methods"]
     for dtype in (torch.float32, torch.float64):
         print(f"\n{name}, {dtype} ({device}): median duration in ms")
         modes = ("fwd", "fwd+bwd", "jvp")
         print(f"{'batch size':>12}" + "".join(f"{f'{m} {mode}':>14}" for mode in modes for m in methods))
         for n in batch_sizes:
-            x = generate(n, dtype)
+            x = b["generate"](n, dtype)
             dx = torch.randn_like(x)
             durations = dict.fromkeys(((m, mode) for m in methods for mode in modes), None)
             for method in methods:
                 func = function(method)
                 try:
                     G = torch.randn_like(func(x))
-                except torch.linalg.LinAlgError:
-                    continue
-                x_grad = x.clone().requires_grad_()
+                    x_grad = x.clone().requires_grad_()
 
-                def forward_backward():
-                    x_grad.grad = None
-                    torch.sum(func(x_grad) * G).backward()
+                    def forward_backward():
+                        x_grad.grad = None
+                        torch.sum(func(x_grad) * G).backward()
 
-                with torch.no_grad():
-                    durations[method, "fwd"] = profile(lambda: func(x))
-                durations[method, "fwd+bwd"] = profile(forward_backward)
-                durations[method, "jvp"] = profile(lambda: torch.func.jvp(func, (x,), (dx,)))
+                    with torch.no_grad():
+                        durations[method, "fwd"] = profile(lambda: func(x))
+                    durations[method, "fwd+bwd"] = profile(forward_backward)
+                    durations[method, "jvp"] = profile(lambda: torch.func.jvp(func, (x,), (dx,)))
+                except RuntimeError:
+                    # e.g. batched cuSOLVER eigh fails for large batches (the error type depends on the cuSOLVER version).
+                    pass
             print(f"{n:>12}" + "".join(format_result(durations[m, mode], 14, ".3f") for mode in modes for m in methods))
 
-    # Accuracy, with respect to the reference method applied in float64.
+    # Accuracy with respect to the reference method applied in float64: max angular deviation of the output,
+    # and relative error (median and max over the batch) of the gradient of a random linear loss.
     n = 10000
-    print(f"\n{name}: max angular deviation (rad) from {methods[0]} in float64 (batch size {n})")
-    print(f"{'dtype':>16}" + "".join(f"{m:>12}" for m in methods))
-    x = generate(n, torch.float64)
-    reference = function(methods[0])(x)
+    x = b["generate"](n, torch.float64)
+    G = torch.randn_like(b["invariant"](function(methods[0])(x)))
+
+    def evaluate(method, dtype):
+        x_grad = x.to(dtype).clone().requires_grad_()
+        output = function(method)(x_grad)
+        torch.sum(b["invariant"](output) * G.to(output.dtype)).backward()
+        return output.detach().double(), x_grad.grad.double()
+
+    output_ref, grad_ref = evaluate(methods[0], torch.float64)
+    columns = ("angle max", "grad med", "grad max")
+    print(f"\n{name}: deviation from {methods[0]} in float64 (batch size {n}, angles in rad, relative gradient errors)")
+    print(f"{'dtype':>16}" + "".join(f"{f'{m} {c}':>16}" for m in methods for c in columns))
     for dtype in (torch.float32, torch.float64):
-        errors = [distance(function(m)(x.to(dtype)).double(), reference).max().item() for m in methods]
-        print(f"{str(dtype):>16}" + "".join(f"{e:>12.1e}" for e in errors))
+        row = f"{str(dtype):>16}"
+        for method in methods:
+            output, grad = evaluate(method, dtype)
+            relative = (grad - grad_ref).flatten(1).norm(dim=-1) / grad_ref.flatten(1).norm(dim=-1)
+            for e in (b["distance"](output, output_ref).max(), relative.median(), relative.max()):
+                row += f"{e.item():>16.1e}"
+        print(row)
