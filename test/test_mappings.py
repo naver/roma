@@ -208,6 +208,30 @@ class TestMappings(unittest.TestCase):
                 torch.sum(roma.special_procrustes(Mg, method=method)).backward()
                 self.assertTrue(torch.all(torch.isfinite(Mg.grad)))
 
+    def test_procrustes_autocast(self):
+        r"""
+        Under autocast, both methods behave as if applied to the input cast to float32 without autocast:
+        the output is float32, and the gradient (including the regularization term) is computed in float32
+        and rounded once to the input dtype.
+        """
+        torch.manual_seed(666)
+        autocast_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
+        M = torch.randn((100, 3, 3), device=device).to(autocast_dtype)
+        grad_R = torch.randn((100, 3, 3), device=device)
+        for method in ("svd", "horn"):
+            for regularization in (0.0, 0.1):
+                M32 = M.float().requires_grad_()
+                R32 = roma.special_procrustes(M32, regularization=regularization, method=method)
+                R32.backward(grad_R)
+                Mr = M.clone().requires_grad_()
+                with torch.autocast(device_type=device.type, dtype=autocast_dtype):
+                    R = roma.special_procrustes(Mr, regularization=regularization, method=method)
+                R.backward(grad_R)
+                self.assertEqual(R.dtype, torch.float32)
+                self.assertTrue(torch.equal(R, R32))
+                self.assertEqual(Mr.grad.dtype, autocast_dtype)
+                self.assertTrue(torch.equal(Mr.grad, M32.grad.to(autocast_dtype)))
+
     def test_special_procrustes_other_dimensions(self):
         torch.manual_seed(666)
         for d in (2, 4):
