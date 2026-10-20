@@ -7,6 +7,7 @@ Set of functions for internal module use.
 
 import torch
 import contextlib
+import functools
 
 
 def flatten_batch_dims(tensor, end_dim):
@@ -47,12 +48,36 @@ except AttributeError:
         torch.cuda.amp.custom_fwd
         torch.cuda.amp.custom_bwd
 
-        def custom_fwd(device_type, **kwargs):
+        def custom_fwd(device_type, cast_inputs=None):
             if device_type == "cuda":
-                return torch.cuda.amp.custom_fwd(**kwargs)
-            else:
-                # No equivalent for other device types: no-op decorator.
+                return torch.cuda.amp.custom_fwd(cast_inputs=cast_inputs)
+            elif cast_inputs is None:
                 return lambda fwd: fwd
+            else:
+                # No equivalent for other device types: emulate the behavior of torch.amp.custom_fwd,
+                # i.e. when autocast is enabled, run forward with autocast disabled and floating-point input tensors
+                # of the considered device type (except float64 ones) cast to cast_inputs.
+                def cast(value):
+                    if (
+                        isinstance(value, torch.Tensor)
+                        and value.is_floating_point()
+                        and value.device.type == device_type
+                        and value.dtype != torch.float64
+                    ):
+                        return value.to(cast_inputs)
+                    return value
+
+                def decorator(fwd):
+                    @functools.wraps(fwd)
+                    def decorate_fwd(*args, **kwargs):
+                        if not autocast_enabled(device_type):
+                            return fwd(*args, **kwargs)
+                        with autocast_disabled(device_type):
+                            return fwd(*map(cast, args), **{key: cast(value) for key, value in kwargs.items()})
+
+                    return decorate_fwd
+
+                return decorator
 
         def custom_bwd(device_type, **kwargs):
             if device_type == "cuda":
