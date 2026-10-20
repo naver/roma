@@ -19,7 +19,7 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
     @staticmethod
     @roma.internal.custom_fwd(device_type="cpu", cast_inputs=torch.float32)
     @roma.internal.custom_fwd(device_type="cuda", cast_inputs=torch.float32)
-    def forward(M, force_rotation, regularization, gradient_eps):
+    def forward(M, force_rotation, gradient_eps):
         assert M.dim() == 3 and M.shape[1] == M.shape[2], "Input should be a BxDxD batch of matrices."
         # Singular values of D are sorted in descending order
         U, D, Vt = torch.linalg.svd(M)
@@ -46,19 +46,18 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
 
     @staticmethod
     def setup_context(ctx, inputs, output):
-        M, force_rotation, regularization, gradient_eps = inputs
+        M, force_rotation, gradient_eps = inputs
         R, DS, US, V = output
         # Store data for backprop and forward-mode differentiation:
-        ctx.save_for_backward(US, DS, V, M, R)
+        ctx.save_for_backward(US, DS, V)
         ctx.save_for_forward(US, DS, V)
         ctx.mark_non_differentiable(US, V)
         ctx.gradient_eps = gradient_eps
-        ctx.regularization = regularization
 
     @staticmethod
     def backward(ctx, grad_R, grad_DS, grad_US, grad_V):
         # Backward-mode differentiation (vector-Jacobian product).
-        US, DS, V, M, R = ctx.saved_tensors
+        US, DS, V = ctx.saved_tensors
         gradient_eps = ctx.gradient_eps
         # Disable autocast to perform computations in full precision.
         with roma.internal.autocast_disabled(US.device.type):
@@ -73,16 +72,11 @@ class _ProcrustesManualDerivatives(torch.autograd.Function):
             grad_M = torch.einsum("bnm, bnk, bklij, bml -> bij", grad_R, US, Omega_klij, V)
             # Gradient contribution of the singular values.
             grad_M = grad_M + (US * grad_DS[:, None, :]) @ V.transpose(-1, -2)
-            if ctx.regularization != 0.0:
-                # Add a regularization term in the direction of the orthonormalized output.
-                # Note: it only affects backpropagation, not forward-mode differentiation.
-                grad_M = grad_M + ctx.regularization * (M - R)
-        return grad_M, None, None, None
+        return grad_M, None, None
 
     @staticmethod
     def jvp(ctx, dM, *args):
         # Forward-mode differentiation (Jacobian-vector product).
-        # Note: the regularization term only affects backpropagation, and is therefore ignored here.
         US, DS, V = ctx.saved_for_forward
         # Disable autocast to perform computations in full precision.
         with roma.internal.autocast_disabled(US.device.type):
@@ -379,10 +373,10 @@ _procrustes_apply_eager = torch._dynamo.disable(_ProcrustesManualDerivatives.app
 _horn_eigenvector_apply_eager = torch._dynamo.disable(_HornEigenvectorManualDerivatives.apply)
 
 
-def _procrustes_apply(M, force_rotation, regularization, gradient_eps):
+def _procrustes_apply(M, force_rotation, gradient_eps):
     if _is_torch_compiling() and torch._C._are_functorch_transforms_active():
-        return _procrustes_apply_eager(M, force_rotation, regularization, gradient_eps)
-    return _ProcrustesManualDerivatives.apply(M, force_rotation, regularization, gradient_eps)
+        return _procrustes_apply_eager(M, force_rotation, gradient_eps)
+    return _ProcrustesManualDerivatives.apply(M, force_rotation, gradient_eps)
 
 
 def _horn_eigenvector_apply(M, gradient_eps):
@@ -391,28 +385,19 @@ def _horn_eigenvector_apply(M, gradient_eps):
     return _HornEigenvectorManualDerivatives.apply(M, gradient_eps)
 
 
-def _horn_procrustes(M, regularization, gradient_eps):
+def _horn_procrustes(M, gradient_eps):
     r"""
     :meta private:
     Rotation matrices maximizing tr(R^T M) for a batch of 3x3 matrices M (Bx3x3 tensor), computed as R = adjoint Horn map of q q^T
     where q is the eigenvector of _horn_eigenvector. Derivatives are those of q (see _HornEigenvectorManualDerivatives),
-    propagated by autograd.
+    propagated by autograd. Computations are performed in float64 (not affected by autocast), and R has the dtype of M.
     The eigenvalue gaps of N(M) are twice the pairwise sums of the singular values of M involved in the SVD-based path,
     hence a damping 2 * gradient_eps to keep the meaning of gradient_eps identical for every dimension.
     """
     assert M.dim() == 3 and M.shape[1:] == (3, 3), "Input should be a Bx3x3 batch of matrices."
-    # Computations are performed in float64 (not affected by autocast).
-    # Under autocast, the input is nevertheless cast to float32 first, consistently with the custom_fwd decorators of
-    # _ProcrustesManualDerivatives: the output is then float32, and during backpropagation the gradient contributions of
-    # the eigenvector and of the regularization are summed in float32 before a single rounding to the input dtype.
-    if roma.internal.autocast_enabled(M.device.type) and M.dtype != torch.float64:
-        M = M.float()
     q = _horn_eigenvector_apply(M.double(), 2 * gradient_eps)
     # Equivalent to unitquat_to_rotmat(q), as a single matmul.
-    R = _horn_matrix_adjoint(q[..., :, None] * q[..., None, :]).to(M.dtype)
-    if regularization != 0.0:
-        R = _ProcrustesRegularization.apply(M, R, regularization)
-    return R
+    return _horn_matrix_adjoint(q[..., :, None] * q[..., None, :]).to(M.dtype)
 
 
 def _supports_float64(device):
@@ -440,7 +425,8 @@ def procrustes(
         force_rotation (bool): if True, forces the output to be a rotation matrix.
         regularization (float >= 0): weight of a regularization term added to the gradient during backpropagation.
             Using this regularization is equivalent to adding a term :math:`regularization * \| M - R \|_F^2` to the training loss function.
-            It only affects backpropagation: forward-mode differentiation (jvp) returns the true directional derivative and ignores it.
+            It only affects backpropagation through the output matrix (not through the optional singular values).
+            Forward-mode differentiation (jvp) returns the true directional derivative and ignores it.
         gradient_eps (float > 0): damping of the derivative when the solution is ill-conditioned.
             The derivative involves the inverse of pairwise sums :math:`t` of (signed) singular values of :math:`M`, which vanish when the solution is not unique:
             :math:`1 / t` is replaced by the damped pseudo-inverse :math:`t / (t^2 + gradient\_eps^2)`, bounded by :math:`1 / (2\, gradient\_eps)`.
@@ -465,6 +451,11 @@ def procrustes(
     """
     assert M.is_floating_point(), "Input should be a floating-point tensor."
     M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
+    # Under autocast, the input is cast to float32 (as done by the custom_fwd decorators of _ProcrustesManualDerivatives):
+    # the output is then float32, and during backpropagation the gradient contributions of the solver and of the regularization
+    # are summed in float32 before a single rounding to the input dtype.
+    if roma.internal.autocast_enabled(M.device.type) and M.dtype != torch.float64:
+        M = M.float()
     if method == "auto":
         horn_applicable = (
             force_rotation and M.shape[-2:] == (3, 3) and not return_singular_values and _supports_float64(M.device)
@@ -477,11 +468,13 @@ def procrustes(
             raise ValueError("method='horn' does not compute singular values.")
         if not _supports_float64(M.device):
             raise ValueError("method='horn' requires float64 support, which is not available on this device.")
-        R = _horn_procrustes(M, regularization, gradient_eps)
-        return roma.internal.unflatten_batch_dims(R, batch_shape)
-    elif method != "svd":
+        R = _horn_procrustes(M, gradient_eps)
+    elif method == "svd":
+        R, DS = _procrustes_apply(M, force_rotation, gradient_eps)[:2]
+    else:
         raise ValueError(f"Unknown method '{method}', expected 'auto', 'svd' or 'horn'.")
-    R, DS = _procrustes_apply(M, force_rotation, regularization, gradient_eps)[:2]
+    if regularization != 0.0:
+        R = _ProcrustesRegularization.apply(M, R, regularization)
     R = roma.internal.unflatten_batch_dims(R, batch_shape)
     if not return_singular_values:
         return R
@@ -500,7 +493,8 @@ def special_procrustes(
         M (...xNxN tensor): batch of square matrices.
         regularization (float >= 0): weight of a regularization term added to the gradient during backpropagation.
             Using this regularization is equivalent to adding a term :math:`regularization * \| M - R \|_F^2` to the training loss function.
-            It only affects backpropagation: forward-mode differentiation (jvp) returns the true directional derivative and ignores it.
+            It only affects backpropagation through the output matrix (not through the optional singular values).
+            Forward-mode differentiation (jvp) returns the true directional derivative and ignores it.
         gradient_eps (float > 0): damping of the derivative when the solution is ill-conditioned.
             The derivative involves the inverse of pairwise sums :math:`t` of (signed) singular values of :math:`M`, which vanish when the solution is not unique:
             :math:`1 / t` is replaced by the damped pseudo-inverse :math:`t / (t^2 + gradient\_eps^2)`, bounded by :math:`1 / (2\, gradient\_eps)`.
