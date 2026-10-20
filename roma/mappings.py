@@ -437,7 +437,8 @@ def procrustes(
             - ``"svd"``: batched singular value decomposition (any dimension).
             - ``"horn"``: closed-form solution for 3x3 matrices with :code:`force_rotation=True`, based on Horn's quaternion formulation
               (B.K.P. Horn, "Closed-form solution of absolute orientation using unit quaternions", JOSA A 1987).
-              Significantly faster than the SVD for large batches (especially on GPU), but slower for a few matrices.
+              Scales better with the batch size than the SVD: slower for small batches, but significantly faster for large ones (especially on GPU),
+              and more accurate for single precision inputs.
               Computations are performed in float64, which is not supported on MPS devices.
               A :code:`ValueError` is raised if the method is not applicable.
             - ``"auto"`` (default): ``"horn"`` whenever applicable, ``"svd"`` otherwise.
@@ -501,7 +502,7 @@ def special_procrustes(
         return_singular_values (bool): if True, also returns the singular values of the SVD decomposition with sign flipping (... tensor), for advanced users.
             Not compatible with ``method="horn"``.
         method (str): algorithm used to solve the problem, see :func:`~roma.mappings.procrustes`.
-            ``"svd"`` (any dimension), ``"horn"`` (closed-form solution for 3x3 matrices, faster for large batches)
+            ``"svd"`` (any dimension), ``"horn"`` (closed-form solution for 3x3 matrices, scaling better with the batch size)
             or ``"auto"`` (default: ``"horn"`` whenever applicable, ``"svd"`` otherwise).
     Returns:
         batch of rotation matrices (...xNxN tensor) and optional singular values.
@@ -596,7 +597,8 @@ def symmatrix_to_projective_point(A, gradient_eps=1e-5, method: str = "auto"):
               (for a 3x3 matrix :math:`M`, the quaternion of the nearest rotation is the eigenvector of a symmetric 4x4 matrix
               associated to its largest eigenvalue, following Horn's absolute orientation formulation, and any symmetric 4x4 matrix
               can be written in this form up to a multiple of the identity).
-              Faster than ``"eigh"`` for large batches, and more accurate for single precision inputs.
+              Scales better with the batch size than ``"eigh"``, which is faster for small batches but may fail for large ones on GPU
+              (batched cuSOLVER eigendecomposition), and more accurate for single precision inputs.
               A :code:`ValueError` is raised on devices without float64 support (MPS).
             - ``"auto"`` (default): ``"horn"`` whenever applicable, ``"eigh"`` otherwise.
 

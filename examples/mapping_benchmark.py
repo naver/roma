@@ -78,14 +78,6 @@ def backward(func, input):
     loss.backward()
 
 
-def backward_symmatrix():
-    if N_with_grad.grad is not None:
-        N_with_grad.grad.data.zero_()
-    R = roma.unitquat_to_rotmat(roma.symmatrixvec_to_unitquat(N_with_grad))
-    loss = torch.mean((R - Rtarget) ** 2)
-    loss.backward()
-
-
 profile(lambda: backward(roma.special_procrustes, M_with_grad), "special_procrustes (forward/backward)")
 profile(lambda: backward(roma.special_gramschmidt, M_with_grad), "special_gramschmidt (forward/backward)")
 profile(
