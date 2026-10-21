@@ -13,8 +13,9 @@ jobs:
     strategy:
       matrix:
         include:
-          # Latest PyTorch
-          - python-version: "3.x"
+          # Latest PyTorch, with the latest Python version it supports
+          # (not "3.x", which may resolve to a Python release without PyTorch wheels yet).
+          - python-version: "3.14"
             pytorch-version: "torch"
             numpy-version: "numpy"
           # Oldest supported PyTorch (no torch.amp.custom_fwd, fallback to torch.cuda.amp)
