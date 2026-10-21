@@ -289,7 +289,7 @@ class _BaseAffine:
 
     def _expanded_tuple(self):
         # Views of the linear and translation parts, expanded to the batch shape of the transformation.
-        linear = self.linear.expand(self.batch_shape + self.linear.shape[-self._linear_ndim:])
+        linear = self.linear.expand(self.batch_shape + self.linear.shape[-self._linear_ndim :])
         translation = self.translation.expand(self.batch_shape + self.translation.shape[-1:])
         return linear, translation
 
