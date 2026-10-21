@@ -302,10 +302,13 @@ class _BaseAffine:
         Returns:
             A ...x(D+1)x(C+1) tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
-        batch_shape, C = self.linear.shape[:-2], self.linear.shape[-1]
+        batch_shape = torch.broadcast_shapes(self.linear.shape[:-2], self.translation.shape[:-1])
+        C = self.linear.shape[-1]
+        linear = self.linear.expand(batch_shape + self.linear.shape[-2:])
+        translation = self.translation.expand(batch_shape + self.translation.shape[-1:])
         output = torch.cat(
             (
-                torch.cat((self.linear, self.translation[..., None]), dim=-1),
+                torch.cat((linear, translation[..., None]), dim=-1),
                 torch.cat(
                     (
                         torch.zeros(batch_shape + (1, C), device=self.translation.device, dtype=self.translation.dtype),
@@ -461,7 +464,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         Returns:
             A ...x4x4 tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
-        batch_shape = self.translation.shape[:-1]
+        batch_shape = torch.broadcast_shapes(self.linear.shape[:-1], self.translation.shape[:-1])
         output_shape = batch_shape + (4, 4)
         if output is None:
             output = torch.zeros(output_shape, device=self.translation.device, dtype=self.translation.dtype)
