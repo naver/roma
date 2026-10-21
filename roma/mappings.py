@@ -436,7 +436,7 @@ def procrustes(
 
             - ``"svd"``: batched singular value decomposition (any dimension).
             - ``"horn"``: closed-form solution for 3x3 matrices with :code:`force_rotation=True`, based on Horn's quaternion formulation
-              (B.K.P. Horn, "Closed-form solution of absolute orientation using unit quaternions", JOSA A 1987).
+              of absolute orientation.
               Scales better with the batch size than the SVD: slower for small batches, but significantly faster for large ones (especially on GPU),
               and more accurate for single precision inputs.
               Computations are performed in float64, which is not supported on MPS devices.
@@ -445,6 +445,8 @@ def procrustes(
 
     Returns:
         batch of orthonormal matrices (...xNxN tensor) and optional singular values.
+    References:
+        - B.K.P. Horn, “Closed-form solution of absolute orientation using unit quaternions,” Journal of the Optical Society of America A, 4(4), 1987, doi: 10.1364/JOSAA.4.000629.
 
     Note:
         Both methods are optimal up to numerical precision, but may differ when the nearest rotation is nearly ambiguous
