@@ -429,6 +429,32 @@ class TestMappings(unittest.TestCase):
             grads.append(Ag.grad)
         self.assertTrue(torch.allclose(grads[0], grads[1], atol=1e-6))
 
+    def test_symmatrix_autocast(self):
+        r"""
+        Under autocast, both methods behave as if applied to the input cast to float32 without autocast
+        (as for special_procrustes): the output is float32, and the gradient is computed in float32 and rounded once
+        to the input dtype. float64 inputs are not affected.
+        """
+        torch.manual_seed(666)
+        autocast_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
+        A = torch.randn((100, 4, 4), device=device)
+        A = (A + A.transpose(-1, -2)).to(autocast_dtype)
+        grad_q = torch.randn((100, 4), device=device)
+        for method in ("eigh", "horn"):
+            A32 = A.float().requires_grad_()
+            q32 = roma.symmatrix_to_projective_point(A32, method=method)
+            q32.backward(grad_q)
+            Ar = A.clone().requires_grad_()
+            with torch.autocast(device_type=device.type, dtype=autocast_dtype):
+                q = roma.symmatrix_to_projective_point(Ar, method=method)
+                q64 = roma.symmatrix_to_projective_point(A.double(), method=method)
+            q.backward(grad_q)
+            self.assertEqual(q.dtype, torch.float32)
+            self.assertTrue(torch.equal(q, q32))
+            self.assertEqual(Ar.grad.dtype, autocast_dtype)
+            self.assertTrue(torch.equal(Ar.grad, A32.grad.to(autocast_dtype)))
+            self.assertEqual(q64.dtype, torch.float64)
+
     def test_symmatrix_derivatives(self):
         torch.manual_seed(666)
         batch_size = 20

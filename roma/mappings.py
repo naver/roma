@@ -452,11 +452,9 @@ def procrustes(
     """
     assert M.is_floating_point(), "Input should be a floating-point tensor."
     M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
-    # Under autocast, the input is cast to float32 (as done by the custom_fwd decorators of _ProcrustesManualDerivatives):
-    # the output is then float32, and during backpropagation the gradient contributions of the solver and of the regularization
-    # are summed in float32 before a single rounding to the input dtype.
-    if roma.internal.autocast_enabled(M.device.type) and M.dtype != torch.float64:
-        M = M.float()
+    # Under autocast, the input is cast to float32 (as done by the custom_fwd decorators of _ProcrustesManualDerivatives),
+    # so that the gradient contributions of the solver and of the regularization are summed in float32.
+    M = roma.internal.autocast_to_float32(M)
     if method == "auto":
         horn_applicable = (
             force_rotation and M.shape[-2:] == (3, 3) and not return_singular_values and _supports_float64(M.device)
@@ -616,6 +614,8 @@ def symmatrix_to_projective_point(A, gradient_eps=1e-5, method: str = "auto"):
     A, batch_shape = roma.internal.flatten_batch_dims(A, end_dim=-3)
     B, D1, D2 = A.shape
     assert (D1, D2) == (4, 4), "Input should be a symmetric Bx4x4 matrix."
+    # Under autocast, the input is cast to float32
+    A = roma.internal.autocast_to_float32(A)
     if method == "auto":
         method = "horn" if _supports_float64(A.device) else "eigh"
     if method == "eigh":

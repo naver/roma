@@ -118,3 +118,15 @@ def autocast_disabled(device_type):
     except RuntimeError:
         # Autocast may not be supported for every device type.
         return contextlib.nullcontext()
+
+
+def autocast_to_float32(x):
+    r"""
+    :meta private:
+    Under autocast, casts a tensor to float32 unless it is float64, as autocast does for linear algebra operations.
+    Subsequent computations then return float32 outputs, and during backpropagation the gradient is computed in float32
+    before a single rounding to the input dtype.
+    """
+    if autocast_enabled(x.device.type) and x.dtype != torch.float64:
+        return x.float()
+    return x
