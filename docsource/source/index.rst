@@ -228,6 +228,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Unreleased:
+    - Improved broadcasting for affine transformations (:class:`~roma.transforms.Affine`, :class:`~roma.transforms.Isometry`, :class:`~roma.transforms.Rigid` and :class:`~roma.transforms.RigidUnitQuat`). The batch shape of a transformation is available as its new :code:`batch_shape` attribute. :code:`len()` of a transformation without batch dimensions now raises a :code:`TypeError`.
 Version 1.7.0:
     - Rewrote :func:`~roma.utils.unitquat_slerp()` with a faster and more accurate formulation, with well-defined first and second order derivatives for all inputs (including identical quaternions). :func:`~roma.utils.rotvec_slerp()` and :func:`~roma.utils.rotmat_slerp()` benefit from these changes.
     - :func:`~roma.utils.unitquat_slerp_fast()` is now a deprecated alias of :func:`~roma.utils.unitquat_slerp()`.

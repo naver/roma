@@ -377,3 +377,60 @@ class TestTransforms(unittest.TestCase):
         squeezed = unsqueezed.squeeze(dim=0)
         self.assertTrue(torch.all(T.linear == squeezed.linear))
         self.assertTrue(torch.all(T.translation == squeezed.translation))
+
+    def test_batch_shape_broadcasting(self):
+        dtype = torch.float64
+        # Batch shapes of the linear and translation parts should be broadcastable, without introducing new dimensions.
+        for linear_batch_shape, translation_batch_shape in [
+            ((2, 1), (1,)),
+            ((2,), (1, 2)),
+            ((2, 1), (3, 2)),
+            ((), (2,)),
+        ]:
+            R = roma.random_rotmat(linear_batch_shape, dtype=dtype)
+            q = roma.random_unitquat(linear_batch_shape, dtype=dtype)
+            t = torch.randn(translation_batch_shape + (3,), dtype=dtype)
+            for Type in (Affine, Isometry, Rigid):
+                with self.assertRaisesRegex(AssertionError, "broadcastable"):
+                    Type(R, t)
+            with self.assertRaisesRegex(AssertionError, "broadcastable"):
+                RigidUnitQuat(q, t)
+
+        x = torch.randn((2, 3, 3), dtype=dtype)
+        for linear_batch_shape, translation_batch_shape in [((2, 1), (1, 3)), ((1, 3), (2, 3)), ((2, 3), (2, 1))]:
+            for Type in (Affine, Isometry, Rigid, RigidUnitQuat):
+                if Type == RigidUnitQuat:
+                    linear = roma.random_unitquat(linear_batch_shape, dtype=dtype)
+                else:
+                    linear = roma.random_rotmat(linear_batch_shape, dtype=dtype)
+                T = Type(linear, torch.randn(translation_batch_shape + (3,), dtype=dtype))
+                self.assertEqual(T.batch_shape, (2, 3))
+                expanded = Type(*T._expanded_tuple())
+                self.assertEqual(expanded.linear.shape, (2, 3, 3, 3))
+                self.assertEqual(expanded.translation.shape, (2, 3, 3))
+                Tx = T.apply(x)
+                self.assertTrue(torch.allclose(Tx, expanded.apply(x)))
+                self.assertEqual(len(T), 2)
+                # Homogeneous coordinates
+                homogeneous = T.to_homogeneous()
+                self.assertEqual(homogeneous.shape, (2, 3, 4, 4))
+                self.assertTrue(torch.allclose(homogeneous, expanded.to_homogeneous()))
+                self.assertTrue(torch.allclose(Type.from_homogeneous(homogeneous).apply(x), Tx))
+                # Indexing
+                self.assertTrue(torch.allclose(T[1].apply(x[1]), Tx[1]))
+                self.assertTrue(torch.allclose(T[:, 2].apply(x[:, 2]), Tx[:, 2]))
+                self.assertTrue(torch.allclose(T[1, 2:].apply(x[1, 2:]), Tx[1, 2:]))
+                # Squeezing
+                self.assertTrue(torch.allclose(T[None].squeeze(0).apply(x), Tx))
+                self.assertRaises(AssertionError, lambda: T.squeeze(0))
+                # Inverse and composition
+                self.assertEqual(T.inverse().batch_shape, (2, 3))
+                self.assertTrue(torch.allclose(T.inverse().apply(Tx), x))
+                self.assertTrue(torch.allclose((T @ T).apply(x), T.apply(Tx)))
+                if Type in (Isometry, Rigid):
+                    identity = Type.identity_like(T)
+                    self.assertEqual(identity.linear.shape, (2, 3, 3, 3))
+                    self.assertEqual(identity.translation.shape, (2, 3, 3))
+
+        T = Rigid(roma.random_rotmat(dtype=dtype), torch.randn(3, dtype=dtype))
+        self.assertRaises(TypeError, lambda: len(T))

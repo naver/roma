@@ -30,6 +30,18 @@ To apply a different transformation to each point, one could use instead:
 
     roma.Rigid(roma.random_rotmat(100), torch.randn(100,3)).apply(torch.randn(100,3))
 
+Batch dimensions
+~~~~~~~~~~~~~~~~
+
+The linear and translation parts of a transformation should have the same number of batch dimensions,
+but their sizes may differ as long as they are broadcastable: the batch shape of the transformation, available as its :code:`batch_shape` attribute,
+is then the broadcasted batch shape of its two parts.
+For example, a unique rotation can be combined with 100 translations as follows:
+
+.. code-block:: python
+
+    roma.Rigid(roma.random_rotmat()[None], torch.randn(100,3))
+
 .. _aliasing_issues:
 
 Aliasing issues
@@ -53,6 +65,9 @@ class Linear:
 
     :var linear: (...xDxC tensor): batch of matrices specifying the transformations considered.
     """
+
+    # Number of trailing dimensions of the linear tensor that are not batch dimensions.
+    _linear_ndim = 2
 
     def __init__(self, linear):
         self.linear = linear
@@ -213,6 +228,9 @@ class RotationUnitQuat(Linear):
         Use :code:`normalize()` if needed.
     """
 
+    # Number of trailing dimensions of the linear tensor that are not batch dimensions.
+    _linear_ndim = 1
+
     def __init__(self, linear):
         self.linear = linear
 
@@ -242,6 +260,14 @@ class _BaseAffine:
     def __init__(self, linear, translation):
         self.linear = linear
         self.translation = translation
+        linear_batch_shape, translation_batch_shape = linear.shape[: -self._linear_ndim], translation.shape[:-1]
+        assert len(linear_batch_shape) == len(translation_batch_shape) and all(
+            a == b or a == 1 or b == 1 for a, b in zip(linear_batch_shape, translation_batch_shape)
+        ), (
+            "Linear and translation parts should have the same number of batch dimensions, with broadcastable sizes "
+            f"(got {tuple(linear_batch_shape)} and {tuple(translation_batch_shape)})."
+        )
+        self.batch_shape = torch.broadcast_shapes(linear_batch_shape, translation_batch_shape)
 
     def compose(self, other):
         linear = self.linear_compose(other)
@@ -261,11 +287,18 @@ class _BaseAffine:
         linear = self.linear_normalize()
         return type(self)(linear, self.translation)
 
+    def _expanded_tuple(self):
+        # Views of the linear and translation parts, expanded to the batch shape of the transformation.
+        linear = self.linear.expand(self.batch_shape + self.linear.shape[-self._linear_ndim:])
+        translation = self.translation.expand(self.batch_shape + self.translation.shape[-1:])
+        return linear, translation
+
     def __getitem__(self, args):
         r"""
         Slicing operator, for convenience.
         """
-        return type(self)(self.linear[args], self.translation[args])
+        linear, translation = self._expanded_tuple()
+        return type(self)(linear[args], translation[args])
 
     def squeeze(self, dim):
         r"""
@@ -274,11 +307,15 @@ class _BaseAffine:
         :var dim: positive integer: The dimension to squeeze.
         """
         assert dim >= 0, "Only positive dimensions are supported to avoid ambiguities."
-        assert self.linear.shape[dim] == self.translation.shape[dim] == 1, ""
+        assert self.linear.shape[dim] == self.translation.shape[dim] == 1, (
+            "Only batch dimensions of size 1 can be squeezed."
+        )
         return type(self)(self.linear.squeeze(dim), self.translation.squeeze(dim))
 
     def __len__(self):
-        return len(self.linear)
+        if len(self.batch_shape) == 0:
+            raise TypeError("len() of a transformation without batch dimensions")
+        return self.batch_shape[0]
 
     def __repr__(self):
         return f"{type(self).__name__}(linear={self.linear.__repr__()}, translation={self.translation.__repr__()})"
@@ -302,10 +339,11 @@ class _BaseAffine:
         Returns:
             A ...x(D+1)x(C+1) tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
-        batch_shape, C = self.linear.shape[:-2], self.linear.shape[-1]
+        linear, translation = self._expanded_tuple()
+        batch_shape, C = self.batch_shape, linear.shape[-1]
         output = torch.cat(
             (
-                torch.cat((self.linear, self.translation[..., None]), dim=-1),
+                torch.cat((linear, translation[..., None]), dim=-1),
                 torch.cat(
                     (
                         torch.zeros(batch_shape + (1, C), device=self.translation.device, dtype=self.translation.dtype),
@@ -351,7 +389,6 @@ class Affine(_BaseAffine, Linear):
             # Set a default null translation.
             translation = torch.zeros(linear.shape[:-2] + (linear.shape[-2],), dtype=linear.dtype, device=linear.device)
         assert translation.shape[-1] == linear.shape[-2], "Incompatible linear and translation dimensions."
-        assert len(linear.shape[:-2]) == len(translation.shape[:-1]), "Batch dimensions should be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
 
 
@@ -407,7 +444,7 @@ class Isometry(Affine, Orthonormal):
         """
         return cls.identity(
             dim=other.translation.shape[-1],
-            batch_shape=other.translation.shape[:-1],
+            batch_shape=other.batch_shape,
             dtype=other.linear.dtype,
             device=other.linear.device,
         )
@@ -450,7 +487,6 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         assert linear.shape[-1] == 4 and translation.shape[-1] == 3, (
             "Expecting respectively a ...x4 quaternion vector and a ...x3 translation vector"
         )
-        assert len(linear.shape[:-1]) == len(translation.shape[:-1]), "Batch dimensions should be broadcastable."
         _BaseAffine.__init__(self, linear, translation)
 
     def to_homogeneous(self, output=None):
@@ -461,8 +497,7 @@ class RigidUnitQuat(_BaseAffine, RotationUnitQuat):
         Returns:
             A ...x4x4 tensor of homogeneous matrices representing the transformation, normalized with a last row equal to (0,...,0,1).
         """
-        batch_shape = self.translation.shape[:-1]
-        output_shape = batch_shape + (4, 4)
+        output_shape = self.batch_shape + (4, 4)
         if output is None:
             output = torch.zeros(output_shape, device=self.translation.device, dtype=self.translation.dtype)
         else:
