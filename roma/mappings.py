@@ -373,16 +373,42 @@ _procrustes_apply_eager = torch._dynamo.disable(_ProcrustesManualDerivatives.app
 _horn_eigenvector_apply_eager = torch._dynamo.disable(_HornEigenvectorManualDerivatives.apply)
 
 
+# Otherwise, Dynamo (observed with torch<=2.13) refuses to trace autograd Functions defining a custom jvp
+# whenever gradients are required, which breaks torch.compile(fullgraph=True) with backpropagation.
+# We therefore apply variants without custom jvp during compilation.
+class _ProcrustesManualDerivativesNoJvp(_ProcrustesManualDerivatives):
+    jvp = torch.autograd.Function.jvp
+
+
+class _HornEigenvectorManualDerivativesNoJvp(_HornEigenvectorManualDerivatives):
+    jvp = torch.autograd.Function.jvp
+
+
+class _ProcrustesRegularizationNoJvp(_ProcrustesRegularization):
+    jvp = torch.autograd.Function.jvp
+
+
 def _procrustes_apply(M, force_rotation, gradient_eps):
-    if _is_torch_compiling() and torch._C._are_functorch_transforms_active():
-        return _procrustes_apply_eager(M, force_rotation, gradient_eps)
+    if _is_torch_compiling():
+        if torch._C._are_functorch_transforms_active():
+            return _procrustes_apply_eager(M, force_rotation, gradient_eps)
+        return _ProcrustesManualDerivativesNoJvp.apply(M, force_rotation, gradient_eps)
     return _ProcrustesManualDerivatives.apply(M, force_rotation, gradient_eps)
 
 
 def _horn_eigenvector_apply(M, gradient_eps):
-    if _is_torch_compiling() and torch._C._are_functorch_transforms_active():
-        return _horn_eigenvector_apply_eager(M, gradient_eps)
+    if _is_torch_compiling():
+        if torch._C._are_functorch_transforms_active():
+            return _horn_eigenvector_apply_eager(M, gradient_eps)
+        return _HornEigenvectorManualDerivativesNoJvp.apply(M, gradient_eps)
     return _HornEigenvectorManualDerivatives.apply(M, gradient_eps)
+
+
+def _procrustes_regularization_apply(M, R, regularization):
+    # Inlined by Dynamo under functorch transforms, its forward has the same derivative as its custom jvp.
+    if _is_torch_compiling():
+        return _ProcrustesRegularizationNoJvp.apply(M, R, regularization)
+    return _ProcrustesRegularization.apply(M, R, regularization)
 
 
 def _horn_procrustes(M, gradient_eps):
@@ -476,7 +502,7 @@ def procrustes(
     else:
         raise ValueError(f"Unknown method '{method}', expected 'auto', 'svd' or 'horn'.")
     if regularization != 0.0:
-        R = _ProcrustesRegularization.apply(M, R, regularization)
+        R = _procrustes_regularization_apply(M, R, regularization)
     R = roma.internal.unflatten_batch_dims(R, batch_shape)
     if not return_singular_values:
         return R

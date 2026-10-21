@@ -103,6 +103,32 @@ class TestProcrustesDerivatives(unittest.TestCase):
                 grads.append(Mr.grad)
             self.assertTrue(torch.allclose(grads[1] - grads[0], regularization * (M - R.detach()), atol=1e-12))
 
+    @unittest.skipIf(
+        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
+        "torch.compile is not properly supported in PyTorch < 2.4",
+    )
+    def test_backward_torch_compile_fullgraph(self):
+        r"""
+        Regression test: Dynamo cannot trace autograd Functions defining a custom jvp when gradients are required,
+        which used to break torch.compile(fullgraph=True) through procrustes.
+        """
+        device = torch.device(0) if torch.cuda.is_available() else None
+        torch.manual_seed(666)
+        for d, method, regularization in ((3, "horn", 0.0), (3, "svd", 0.0), (4, "svd", 0.0), (3, "horn", 0.1)):
+            with self.subTest(d=d, method=method, regularization=regularization):
+                M = torch.randn(10, d, d, dtype=torch.float64, device=device)
+                grad_R = torch.randn_like(M)
+
+                def func(M):
+                    return roma.special_procrustes(M, regularization=regularization, method=method)
+
+                grads = []
+                for f in (func, torch.compile(func, backend="aot_eager", fullgraph=True)):
+                    Mr = M.clone().requires_grad_()
+                    f(Mr).backward(grad_R)
+                    grads.append(Mr.grad)
+                self.assertTrue(torch.allclose(grads[0], grads[1], atol=1e-12))
+
 
 class TestProcrustesForwardDerivatives(unittest.TestCase):
     r"""
