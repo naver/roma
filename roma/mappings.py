@@ -446,6 +446,7 @@ def procrustes(
     Returns:
         batch of orthonormal matrices (...xNxN tensor) and optional singular values.
     References:
+        - P.H. Schönemann, “A generalized solution of the orthogonal Procrustes problem,” Psychometrika, 31(1), 1966, doi: 10.1007/BF02289451.
         - B.K.P. Horn, “Closed-form solution of absolute orientation using unit quaternions,” Journal of the Optical Society of America A, 4(4), 1987, doi: 10.1364/JOSAA.4.000629.
 
     Note:
