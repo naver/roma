@@ -228,6 +228,8 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Version 1.7.1:
+    - Fixed ``torch.compile(fullgraph=True)`` with backpropagation through :func:`~roma.mappings.procrustes()`, :func:`~roma.mappings.special_procrustes()` and :func:`~roma.mappings.symmatrix_to_projective_point()`, broken since version 1.6 by Dynamo not tracing autograd Functions with a custom jvp.
 Version 1.7.0:
     - Rewrote :func:`~roma.utils.unitquat_slerp()` with a faster and more accurate formulation, with well-defined first and second order derivatives for all inputs (including identical quaternions). :func:`~roma.utils.rotvec_slerp()` and :func:`~roma.utils.rotmat_slerp()` benefit from these changes.
     - :func:`~roma.utils.unitquat_slerp_fast()` is now a deprecated alias of :func:`~roma.utils.unitquat_slerp()`.
