@@ -541,6 +541,45 @@ def special_procrustes(
     return procrustes(M, True, regularization, gradient_eps, return_singular_values, method)
 
 
+def special_procrustes_unitquat(M, gradient_eps=1e-5):
+    r"""
+    Returns the unit quaternion :math:`q` of the rotation matrix :math:`R` minimizing Frobenius norm :math:`\| M - R \|_F`,
+    i.e. the quaternion of :func:`~roma.mappings.special_procrustes` for 3x3 matrices.
+
+    The quaternion is computed directly with Horn's closed-form method (see the ``method`` argument of
+    :func:`~roma.mappings.procrustes`), without building the rotation matrix. Computations are performed in float64.
+    On devices without float64 support (MPS), the rotation matrix is computed with the SVD-based method instead,
+    and converted with :func:`~roma.mappings.rotmat_to_unitquat`.
+
+    Args:
+        M (...x3x3 tensor): batch of 3x3 matrices.
+        gradient_eps (float > 0): damping of the derivative when the solution is ill-conditioned, see :func:`~roma.mappings.procrustes`.
+    Returns:
+        batch of unit quaternions (...x4 tensor, XYZW convention). The sign of :math:`q` is arbitrary.
+    Raises:
+        ValueError: if the input matrices are not 3x3.
+    References:
+        B.K.P. Horn, “Closed-form solution of absolute orientation using unit quaternions,” Journal of the Optical Society of America A, 4(4), 1987, doi: 10.1364/JOSAA.4.000629.
+
+    Note:
+        When the nearest rotation is nearly ambiguous (relative gap between singular values of :math:`M` below :math:`10^{-7}`),
+        some optimal rotation is returned, and the derivative is damped (see ``gradient_eps``).
+    """
+    assert M.is_floating_point(), "Input should be a floating-point tensor."
+    if M.shape[-2:] != (3, 3):
+        raise ValueError("special_procrustes_unitquat is only applicable to 3x3 matrices.")
+    if not _supports_float64(M.device):
+        # In float32, the closed form returns a wrong eigenvector for relative gaps between singular values
+        # below about 3e-4 (the eigenvalue estimate is only accurate to the square root of the machine epsilon).
+        return rotmat_to_unitquat(special_procrustes(M, gradient_eps=gradient_eps, method="svd"))
+    M, batch_shape = roma.internal.flatten_batch_dims(M, -3)
+    # Under autocast, the input is cast to float32 (see procrustes).
+    M = roma.internal.autocast_to_float32(M)
+    # Damping consistent with _horn_procrustes.
+    q = _horn_eigenvector_apply(M.double(), 2 * gradient_eps).to(M.dtype)
+    return roma.internal.unflatten_batch_dims(q, batch_shape)
+
+
 def procrustes_naive(M, force_rotation: bool = False, return_singular_values: bool = False):
     r"""
     Implementation of :func:`~roma.mappings.procrustes` relying on default backward pass of autograd and SVD decomposition.

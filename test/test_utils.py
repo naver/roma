@@ -439,6 +439,69 @@ class TestUtils(unittest.TestCase):
                 self.assertTrue(is_close(t, t_true))
                 self.assertTrue(is_close(scale, scale_true))
 
+    def test_rigid_vectors_registration_unitquat(self):
+        batch_shape = (34, 16)
+        n = 100
+        for dtype in (torch.float32, torch.float64):
+            for weights in [None, torch.rand(size=batch_shape + (n,), dtype=dtype)]:
+                R_true = roma.random_rotmat(batch_shape, dtype=dtype)
+                scale_true = torch.exp(torch.randn(size=batch_shape, dtype=dtype))
+                X = torch.randn(batch_shape + (n, 3), dtype=dtype)
+                Y = scale_true[..., None, None] * torch.einsum("...ik, ...jk -> ...ji", R_true, X)
+                q, scale = roma.rigid_vectors_registration_unitquat(X, Y, weights, compute_scaling=True)
+                self.assertEqual(q.shape, batch_shape + (4,))
+                self.assertEqual(q.dtype, dtype)
+                self.assertTrue(is_close(torch.norm(q, dim=-1), torch.ones(batch_shape, dtype=dtype)))
+                self.assertTrue(is_close(roma.unitquat_to_rotmat(q), R_true))
+                self.assertTrue(is_close(scale, scale_true))
+                # Consistency with the rotation matrix variant, on a noisy problem.
+                Y = Y + torch.randn_like(Y)
+                q = roma.rigid_vectors_registration_unitquat(X, Y, weights)
+                R = roma.rigid_vectors_registration(X, Y, weights)
+                self.assertTrue(is_close(roma.unitquat_to_rotmat(q), R))
+
+    def test_rigid_points_registration_unitquat(self):
+        batch_shape = (34, 16)
+        n = 100
+        for dtype in (torch.float32, torch.float64):
+            for weights in [None, torch.rand(size=batch_shape + (n,), dtype=dtype)]:
+                R_true = roma.random_rotmat(batch_shape, dtype=dtype)
+                t_true = torch.randn(batch_shape + (3,), dtype=dtype)
+                scale_true = torch.exp(torch.randn(size=batch_shape, dtype=dtype))
+                X = torch.randn(batch_shape + (n, 3), dtype=dtype)
+                Y = scale_true[..., None, None] * torch.einsum("...ik, ...jk -> ...ji", R_true, X) + t_true.unsqueeze(
+                    -2
+                )
+                q, t, scale = roma.rigid_points_registration_unitquat(X, Y, weights, compute_scaling=True)
+                self.assertTrue(is_close(roma.unitquat_to_rotmat(q), R_true))
+                self.assertTrue(is_close(t, t_true))
+                self.assertTrue(is_close(scale, scale_true))
+                # Consistency with the rotation matrix variant, on a noisy problem.
+                Y = Y + torch.randn_like(Y)
+                q, t = roma.rigid_points_registration_unitquat(X, Y, weights)
+                R, t_ref = roma.rigid_points_registration(X, Y, weights)
+                self.assertTrue(is_close(roma.unitquat_to_rotmat(q), R))
+                self.assertTrue(is_close(t, t_ref))
+
+    def test_rigid_registration_unitquat_gradient(self):
+        X = torch.randn(5, 20, 3, dtype=torch.float64)
+        Y = torch.randn(5, 20, 3, dtype=torch.float64, requires_grad=True)
+        weights = torch.rand(5, 20, dtype=torch.float64, requires_grad=True)
+
+        def func(Y, weights):
+            q, t, s = roma.rigid_points_registration_unitquat(X, Y, weights, compute_scaling=True)
+            # Sign-invariant function of the quaternion.
+            return roma.unitquat_to_rotmat(q), t, s
+
+        self.assertTrue(torch.autograd.gradcheck(func, (Y, weights)))
+
+    def test_rigid_registration_unitquat_invalid_dimension(self):
+        X = torch.randn(10, 2)
+        with self.assertRaises(ValueError):
+            roma.rigid_vectors_registration_unitquat(X, X)
+        with self.assertRaises(ValueError):
+            roma.rigid_points_registration_unitquat(X, X)
+
 
 if __name__ == "__main__":
     unittest.main()

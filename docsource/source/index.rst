@@ -80,6 +80,7 @@ While rotation vectors or Euler angles can be used for such purpose, they suffer
     Mapping from a 3x2 tensor to 3x3 rotation matrix, using special Gram-Schmidt orthonormalization (*6D* representation, popularized by `Zhou et al. <https://arxiv.org/abs/1812.07035>`_).
 :func:`~roma.mappings.special_procrustes`
     Mapping from a nxn arbitrary matrix to a nxn rotation matrix, using special orthogonal Procrustes orthonormalization.
+    For 3x3 matrices, :func:`~roma.mappings.special_procrustes_unitquat` returns the same rotation as a unit quaternion.
 :func:`~roma.mappings.symmatrixvec_to_unitquat`
     Mapping from a 10D vector to an antipodal pair of quaternion through eigenvector decomposition of a 4x4 symmetric matrix, proposed by `Peretroukhin et al. <https://arxiv.org/abs/2006.01031>`_.
     
@@ -138,6 +139,9 @@ Rigid registration
 
 .. literalinclude :: ../../examples/snippets/rigid_registration.py
     :language: python
+
+For 3D data, :func:`~roma.utils.rigid_points_registration_unitquat` and :func:`~roma.utils.rigid_vectors_registration_unitquat`
+return the rotation as a unit quaternion instead, computed directly with Horn's closed-form method.
 
 Spherical linear interpolation (SLERP)
 --------------------------------------
@@ -228,6 +232,9 @@ Bits of code were adapted from SciPy. Documentation is generated, distributed an
 
 Changelog
 ==========
+Unreleased:
+    - Added :func:`~roma.mappings.special_procrustes_unitquat()`, returning the unit quaternion of the rotation matrix computed by :func:`~roma.mappings.special_procrustes()` for 3x3 matrices, directly with Horn's closed-form method.
+    - Added :func:`~roma.utils.rigid_points_registration_unitquat()` and :func:`~roma.utils.rigid_vectors_registration_unitquat()`, variants of :func:`~roma.utils.rigid_points_registration()` and :func:`~roma.utils.rigid_vectors_registration()` for 3D data returning the rotation as a unit quaternion, based on :func:`~roma.mappings.special_procrustes_unitquat()`.
 Version 1.7.1:
     - Improved broadcasting for affine transformations (:class:`~roma.transforms.Affine`, :class:`~roma.transforms.Isometry`, :class:`~roma.transforms.Rigid` and :class:`~roma.transforms.RigidUnitQuat`). The batch shape of a transformation is available as its new :code:`batch_shape` attribute. :code:`len()` of a transformation without batch dimensions now raises a :code:`TypeError`.
     - Fixed ``torch.compile(fullgraph=True)`` with backpropagation through :func:`~roma.mappings.procrustes()`, :func:`~roma.mappings.special_procrustes()` and :func:`~roma.mappings.symmatrix_to_projective_point()`, broken since version 1.6 by Dynamo not tracing autograd Functions with a custom jvp.

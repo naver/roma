@@ -2,6 +2,7 @@
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
 import unittest
+import unittest.mock
 import torch
 import roma
 import numpy as np
@@ -207,6 +208,37 @@ class TestMappings(unittest.TestCase):
                 Mg = M.clone().requires_grad_()
                 torch.sum(roma.special_procrustes(Mg, method=method)).backward()
                 self.assertTrue(torch.all(torch.isfinite(Mg.grad)))
+
+    def test_special_procrustes_unitquat(self):
+        torch.manual_seed(666)
+        for dtype in (torch.float32, torch.float64):
+            M = torch.randn((5, 7, 3, 3), dtype=dtype, device=device)
+            q = roma.special_procrustes_unitquat(M)
+            self.assertEqual(q.shape, (5, 7, 4))
+            self.assertEqual(q.dtype, dtype)
+            # Same rotation as the matrix variant, which builds it from the same quaternion.
+            self.assertTrue(is_close(roma.unitquat_to_rotmat(q), roma.special_procrustes(M, method="horn")))
+            with self.assertRaises(ValueError):
+                roma.special_procrustes_unitquat(torch.randn((10, 4, 4), dtype=dtype, device=device))
+        # Damped derivatives, through a sign-invariant function of the quaternion.
+        M = torch.randn((10, 3, 3), dtype=torch.float64, device=device, requires_grad=True)
+        self.assertTrue(
+            torch.autograd.gradcheck(lambda M: roma.unitquat_to_rotmat(roma.special_procrustes_unitquat(M)), (M,))
+        )
+
+    def test_special_procrustes_unitquat_without_float64(self):
+        # On devices without float64 support (MPS), the SVD-based method is used instead of Horn's closed form.
+        torch.manual_seed(666)
+        M = torch.randn((5, 7, 3, 3), device=device)
+        q_horn = roma.special_procrustes_unitquat(M)
+        with unittest.mock.patch("roma.mappings._supports_float64", return_value=False):
+            q = roma.special_procrustes_unitquat(M)
+            Mg = M.clone().requires_grad_()
+            torch.sum(roma.unitquat_to_rotmat(roma.special_procrustes_unitquat(Mg))).backward()
+        self.assertEqual(q.shape, (5, 7, 4))
+        self.assertEqual(q.dtype, torch.float32)
+        self.assertTrue(is_close(roma.unitquat_to_rotmat(q), roma.unitquat_to_rotmat(q_horn)))
+        self.assertTrue(torch.all(torch.isfinite(Mg.grad)))
 
     def test_procrustes_autocast(self):
         r"""

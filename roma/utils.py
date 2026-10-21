@@ -468,6 +468,66 @@ def rotmat_slerp(R0, R1, steps):
     return roma.mappings.unitquat_to_rotmat(interpolated_q)
 
 
+def _normalized_weights(x, weights):
+    r"""
+    :meta private:
+    Weights (...xN tensor) normalized to sum to 1, uniform if weights is None, for a list of N vectors x (...xNxD tensor).
+    """
+    if weights is None:
+        n = x.shape[-2]
+        return torch.full((1,), 1 / n, dtype=x.dtype, device=x.device).expand(x.shape[:-1])
+    return weights / torch.sum(weights, dim=-1, keepdim=True)
+
+
+def _rigid_vectors_registration(x, y, weights, compute_scaling, unitquat):
+    r"""
+    :meta private:
+    Shared implementation of :func:`rigid_vectors_registration` and :func:`rigid_vectors_registration_unitquat`,
+    for normalized weights (see :func:`_normalized_weights`).
+    Returns the rotation (matrix, or unit quaternion if unitquat=True) and the scaling (None if compute_scaling=False).
+    """
+    if unitquat and x.shape[-1] != 3:
+        raise ValueError("Unit quaternion registration is only applicable to 3D data.")
+    M = torch.einsum("...k, ...ki, ...kj -> ...ij", weights, y, x)
+    if unitquat:
+        rotation = roma.mappings.special_procrustes_unitquat(M)
+    else:
+        rotation = roma.mappings.special_procrustes(M)
+    if not compute_scaling:
+        return rotation, None
+    R = roma.mappings.unitquat_to_rotmat(rotation) if unitquat else rotation
+    # Optimal scaling s = tr(DS) / sigma2_x (Umeyama, IEEE TPAMI 1991, eq. 42), where M = U D V^T is the SVD of M,
+    # S = diag(1, ..., 1, det(U V^T)) the sign correction, and sigma2_x the weighted mean squared norm of x.
+    # Since R = U S V^T, tr(DS) = tr(R^T M): the scaling does not require the singular values,
+    # and therefore works with any solver (in particular Horn's method in 3D, which does not compute them).
+    DS_trace = torch.sum(R * M, dim=(-2, -1))
+    sigma2_x = torch.einsum("...k, ...ki, ...ki -> ...", weights, x, x)
+    return rotation, DS_trace / sigma2_x
+
+
+def _rigid_points_registration(x, y, weights, compute_scaling, unitquat):
+    r"""
+    :meta private:
+    Shared implementation of :func:`rigid_points_registration` and :func:`rigid_points_registration_unitquat`.
+    Returns the rotation (matrix, or unit quaternion if unitquat=True), the translation and the scaling (None if compute_scaling=False).
+    """
+    weights = _normalized_weights(x, weights)
+    # Center data
+    xmean = torch.einsum("...k, ...ki -> ...i", weights, x)
+    ymean = torch.einsum("...k, ...ki -> ...i", weights, y)
+    rotation, scale = _rigid_vectors_registration(
+        x - xmean[..., None, :], y - ymean[..., None, :], weights, compute_scaling, unitquat
+    )
+    # Translation t = ymean - s R xmean.
+    if unitquat:
+        rotated_xmean = quat_action(rotation, xmean, is_normalized=True)
+    else:
+        rotated_xmean = torch.einsum("...ij, ...j -> ...i", rotation, xmean)
+    if compute_scaling:
+        rotated_xmean = scale[..., None] * rotated_xmean
+    return rotation, ymean - rotated_xmean, scale
+
+
 def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
     r"""
     Returns the rotation matrix :math:`R` and the optional scaling :math:`s` that best align an input list of vectors :math:`(x_i)_{i=1...n}` to a target list of vectors :math:`(y_i)_{i=1...n}`
@@ -483,26 +543,31 @@ def rigid_vectors_registration(x, y, weights=None, compute_scaling=False):
         if :code:`compute_scaling=True`.
         Returns the rotation matrix :math:`R` otherwise.
     """
-    if weights is None:
-        n = x.shape[-2]
-        M = torch.einsum("...ki, ...kj -> ...ij", y, x / n)
-    else:
-        # Normalize weights
-        weights = weights / torch.sum(weights, dim=-1, keepdim=True)
-        M = torch.einsum("...k, ...ki, ...kj -> ...ij", weights, y, x)
-    R = roma.special_procrustes(M)
-    if compute_scaling:
-        # Using notations from (Umeyema, IEEE TPAMI 1991): tr(DS) = tr(R^T M),
-        # which avoids requesting the singular values (and the slower SVD-based solver in 3D).
-        DS_trace = torch.sum(R * M, dim=(-2, -1))
-        if weights is None:
-            sigma2_x = torch.mean(torch.sum(torch.square(x), dim=-1), dim=-1)
-        else:
-            sigma2_x = torch.sum(weights * torch.sum(torch.square(x), dim=-1), dim=-1)
-        scale = DS_trace / sigma2_x
-        return R, scale
-    else:
-        return R
+    R, scale = _rigid_vectors_registration(x, y, _normalized_weights(x, weights), compute_scaling, unitquat=False)
+    return (R, scale) if compute_scaling else R
+
+
+def rigid_vectors_registration_unitquat(x, y, weights=None, compute_scaling=False):
+    r"""
+    Same as :func:`~roma.utils.rigid_vectors_registration` for 3D vectors, returning the rotation as a unit quaternion :math:`q`.
+
+    The quaternion is computed with :func:`~roma.mappings.special_procrustes_unitquat` (Horn's closed-form method).
+
+    Args:
+        x (...xNx3 tensor): list of N 3D vectors.
+        y (...xNx3 tensor): list of corresponding target vectors.
+        weights (None or ...xN tensor): optional list of weights associated to each vector.
+    Returns:
+        A tuple :math:`(q, s)` consisting of the unit quaternion :math:`q` (...x4 tensor, XYZW convention)
+        and the scaling :math:`s` (... tensor) if :code:`compute_scaling=True`.
+        Returns the unit quaternion :math:`q` otherwise.
+        The sign of :math:`q` is arbitrary.
+
+    Raises:
+        ValueError: if the vectors are not 3D.
+    """
+    q, scale = _rigid_vectors_registration(x, y, _normalized_weights(x, weights), compute_scaling, unitquat=True)
+    return (q, scale) if compute_scaling else q
 
 
 def rigid_points_registration(x, y, weights=None, compute_scaling=False):
@@ -526,23 +591,32 @@ def rigid_points_registration(x, y, weights=None, compute_scaling=False):
 
         W. Kabsch, "A solution for the best rotation to relate two sets of vectors". Acta Crystallographica, A32, 1976.
     """
-    # Center data
-    if weights is None:
-        xmean = torch.mean(x, dim=-2, keepdim=True)
-        ymean = torch.mean(y, dim=-2, keepdim=True)
-    else:
-        normalized_weights = weights / torch.sum(weights, dim=-1, keepdim=True)
-        xmean = torch.sum(normalized_weights[..., None] * x, dim=-2, keepdim=True)
-        ymean = torch.sum(normalized_weights[..., None] * y, dim=-2, keepdim=True)
-    xhat = x - xmean
-    yhat = y - ymean
+    R, t, scale = _rigid_points_registration(x, y, weights, compute_scaling, unitquat=False)
+    return (R, t, scale) if compute_scaling else (R, t)
 
-    # Solve the vectors registration problem
-    if compute_scaling:
-        R, scale = rigid_vectors_registration(xhat, yhat, weights, compute_scaling=compute_scaling)
-        t = (ymean - torch.einsum("...ik, ...jk -> ...ji", scale[..., None, None] * R, xmean)).squeeze(-2)
-        return R, t, scale
-    else:
-        R = rigid_vectors_registration(xhat, yhat, weights, compute_scaling=compute_scaling)
-        t = (ymean - torch.einsum("...ik, ...jk -> ...ji", R, xmean)).squeeze(-2)
-        return R, t
+
+def rigid_points_registration_unitquat(x, y, weights=None, compute_scaling=False):
+    r"""
+    Same as :func:`~roma.utils.rigid_points_registration` for 3D points, returning the rotation as a unit quaternion :math:`q`.
+
+    The quaternion is computed with :func:`~roma.mappings.special_procrustes_unitquat` (Horn's closed-form method).
+
+    Args:
+        x (...xNx3 tensor): list of N 3D points.
+        y (...xNx3 tensor): list of corresponding target points.
+        weights (None or ...xN tensor): optional list of weights associated to each point.
+    Returns:
+        a triplet :math:`(q, t, s)` consisting of a unit quaternion :math:`q` (...x4 tensor, XYZW convention),
+        a translation vector :math:`t` (...x3 tensor),
+        and a scaling :math:`s` (... tensor) if :code:`compute_scaling=True`.
+        Returns :math:`(q, t)` otherwise.
+        The sign of :math:`q` is arbitrary.
+
+    Raises:
+        ValueError: if the points are not 3D.
+
+    Reference:
+        B.K.P. Horn, “Closed-form solution of absolute orientation using unit quaternions,” Journal of the Optical Society of America A, 4(4), 1987, doi: 10.1364/JOSAA.4.000629.
+    """
+    q, t, scale = _rigid_points_registration(x, y, weights, compute_scaling, unitquat=True)
+    return (q, t, scale) if compute_scaling else (q, t)
