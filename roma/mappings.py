@@ -110,12 +110,23 @@ _GAP_TOL = 1e-7  # Relative eigenvalue gap below which an eigenvalue is consider
 _SHIFT = 1e-13  # Relative offset of the inverse iteration shift, to avoid an exactly singular system.
 
 
-@functools.lru_cache(maxsize=None)
 def _horn_map(device):
     r"""
     :meta private:
     Linear map (9x16 tensor) from the 9 entries of a 3x3 matrix M to the 16 entries of the symmetric 4x4 matrix N(M)
     of Horn's paper, for quaternions in XYZW convention. Its rows are orthogonal with squared norm 4.
+    """
+    # Dynamo does not support functools.lru_cache (it warns and traces the wrapped function):
+    # during compilation, the map is built within the graph instead.
+    if _is_torch_compiling():
+        return _build_horn_map(device)
+    return _cached_horn_map(device)
+
+
+def _build_horn_map(device):
+    r"""
+    :meta private:
+    Builds the linear map returned by _horn_map.
     """
     e = torch.eye(9, dtype=torch.float64).reshape(9, 3, 3)
     (m11, m12, m13), (m21, m22, m23), (m31, m32, m33) = (row.unbind(-1) for row in e.unbind(-2))
@@ -126,6 +137,9 @@ def _horn_map(device):
                         m32 - m23, m13 - m31, m21 - m12, m11 + m22 + m33], dim=-1)
     # fmt: on
     return horn.to(device)
+
+
+_cached_horn_map = functools.lru_cache(maxsize=None)(_build_horn_map)
 
 
 def _horn_matrix(M):
