@@ -406,7 +406,7 @@ class TestTransforms(unittest.TestCase):
                 T = Type(linear, torch.randn(translation_batch_shape + (3,), dtype=dtype))
                 self.assertEqual(T.batch_shape, (2, 3))
                 expanded = Type(*T._expanded_tuple())
-                self.assertEqual(expanded.linear.shape, (2, 3, 3, 3))
+                self.assertEqual(expanded.linear.shape, (2, 3, 4) if Type == RigidUnitQuat else (2, 3, 3, 3))
                 self.assertEqual(expanded.translation.shape, (2, 3, 3))
                 Tx = T.apply(x)
                 self.assertTrue(torch.allclose(Tx, expanded.apply(x)))
