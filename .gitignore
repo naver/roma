@@ -11,3 +11,4 @@ htmlcov/
 build/
 .venv/
 uv.lock
+.claude/
