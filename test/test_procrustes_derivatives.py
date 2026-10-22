@@ -105,8 +105,8 @@ class TestProcrustesDerivatives(unittest.TestCase):
             self.assertTrue(torch.allclose(grads[1] - grads[0], regularization * (M - R.detach()), atol=1e-12))
 
     @unittest.skipIf(
-        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
-        "torch.compile is not properly supported in PyTorch < 2.4",
+        utils.torch_version < (2, 5),
+        "torch.compile(fullgraph=True) cannot trace torch._C._are_functorch_transforms_active in PyTorch < 2.5",
     )
     def test_backward_torch_compile_fullgraph(self):
         r"""
@@ -117,6 +117,10 @@ class TestProcrustesDerivatives(unittest.TestCase):
         torch.manual_seed(666)
         for d, method, regularization in ((3, "horn", 0.0), (3, "svd", 0.0), (4, "svd", 0.0), (3, "horn", 0.1)):
             with self.subTest(d=d, method=method, regularization=regularization):
+                if method == "svd" and utils.torch_version < (2, 11):
+                    self.skipTest(
+                        "torch.compile(fullgraph=True) cannot trace torch.amp.custom_fwd (SVD-based method) in PyTorch < 2.11"
+                    )
                 M = torch.randn(10, d, d, dtype=torch.float64, device=device)
                 grad_R = torch.randn_like(M)
 
@@ -131,8 +135,8 @@ class TestProcrustesDerivatives(unittest.TestCase):
                 self.assertTrue(torch.allclose(grads[0], grads[1], atol=1e-12))
 
     @unittest.skipIf(
-        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
-        "torch.compile is not properly supported in PyTorch < 2.4",
+        utils.torch_version < (2, 5),
+        "torch.compile(fullgraph=True) cannot trace torch._C._are_functorch_transforms_active in PyTorch < 2.5",
     )
     def test_special_procrustes_unitquat_backward_torch_compile_fullgraph(self):
         r"""
@@ -151,6 +155,10 @@ class TestProcrustesDerivatives(unittest.TestCase):
 
         for supports_float64 in (True, False):
             with self.subTest(supports_float64=supports_float64):
+                if not supports_float64 and utils.torch_version < (2, 11):
+                    self.skipTest(
+                        "torch.compile(fullgraph=True) cannot trace torch.amp.custom_fwd (SVD-based method) in PyTorch < 2.11"
+                    )
                 with unittest.mock.patch("roma.mappings._supports_float64", lambda device: supports_float64):
                     torch._dynamo.reset()
                     results = []
@@ -293,7 +301,7 @@ class TestProcrustesForwardDerivatives(unittest.TestCase):
         self.assertTrue(torch.all(dR0 == dR1))
 
     @unittest.skipIf(
-        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
+        utils.torch_version < (2, 4),
         "torch.func.jvp under torch.compile is not properly supported in PyTorch < 2.4",
     )
     def test_jvp_torch_compile(self):

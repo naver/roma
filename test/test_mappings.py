@@ -6,7 +6,7 @@ import unittest.mock
 import torch
 import roma
 import numpy as np
-from test.utils import is_close
+from test.utils import is_close, torch_version
 
 device = torch.device(0) if torch.cuda.is_available() else torch.device("cpu")
 
@@ -417,7 +417,7 @@ class TestMappings(unittest.TestCase):
         self.assertTrue(torch.autograd.gradcheck(roma.rotmat_to_unitquat, (R,)))
 
     @unittest.skipIf(
-        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
+        torch_version < (2, 4),
         "torch.compile is not properly supported in PyTorch < 2.4",
     )
     def test_rotmat_to_unitquat_torch_compile_fullgraph(self):

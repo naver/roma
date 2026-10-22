@@ -6,7 +6,7 @@ import torch
 import numpy as np
 import roma
 import roma.internal
-from test.utils import is_close
+from test.utils import is_close, torch_version
 
 
 class TestUtils(unittest.TestCase):
@@ -546,8 +546,8 @@ class TestUtils(unittest.TestCase):
                             self.assertTrue(torch.allclose(a, b, atol=1e-12))
 
     @unittest.skipIf(
-        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
-        "torch.compile is not properly supported in PyTorch < 2.4",
+        torch_version < (2, 5),
+        "torch.compile(fullgraph=True) cannot trace torch._C._are_functorch_transforms_active in PyTorch < 2.5",
     )
     def test_rigid_registration_unitquat_torch_compile_fullgraph(self):
         torch.manual_seed(666)
