@@ -227,7 +227,11 @@ def quat_inverse(quat):
         - Inverse of null quaternion is undefined.
         - For unit quaternions, consider using conjugation instead.
     """
-    return quat_conjugation(quat) / torch.sum(quat**2, dim=-1, keepdim=True)
+    # Rescale before squaring: the norm squared may overflow or underflow
+    # even when every component of the inverse is representable.
+    scale = torch.amax(torch.abs(quat), dim=-1, keepdim=True)
+    scaled = quat / scale
+    return (quat_conjugation(scaled) / torch.sum(scaled**2, dim=-1, keepdim=True)) / scale
 
 
 def quat_normalize(quat):
@@ -239,7 +243,9 @@ def quat_normalize(quat):
     Returns:
         batch of quaternions (...x4 tensor, XYZW convention).
     """
-    return quat / torch.linalg.norm(quat, dim=-1, keepdim=True)
+    scale = torch.amax(torch.abs(quat), dim=-1, keepdim=True)
+    scaled = quat / scale
+    return scaled / torch.linalg.norm(scaled, dim=-1, keepdim=True)
 
 
 def quat_product(p, q):

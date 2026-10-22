@@ -158,6 +158,34 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(torch.allclose(roma.quat_action(q, v), expected))
         self.assertTrue(torch.allclose(roma.RotationUnitQuat(q).apply(v), expected))
 
+    def test_quaternion_extreme_scales(self):
+        for dtype, scales in ((torch.float32, (1e-25, 1e25)), (torch.float64, (1e-200, 1e200))):
+            q = torch.tensor([1.0, -2.0, 3.0, 4.0], dtype=dtype)
+            unit = q / np.sqrt(30.0)
+            inverse = torch.tensor([-1.0, 2.0, -3.0, 4.0], dtype=dtype) / 30.0
+            for scale in scales:
+                scaled = q * scale
+                normalized = roma.quat_normalize(scaled)
+                actual_inverse = roma.quat_inverse(scaled)
+                self.assertTrue(torch.isfinite(normalized).all())
+                self.assertTrue(torch.isfinite(actual_inverse).all())
+                self.assertTrue(torch.allclose(normalized, unit))
+                self.assertTrue(torch.allclose(actual_inverse * scale, inverse))
+                self.assertTrue(
+                    torch.allclose(
+                        roma.quat_product(scaled, actual_inverse),
+                        roma.identity_quat(dtype=dtype),
+                        atol=4 * torch.finfo(dtype).eps,
+                        rtol=4 * torch.finfo(dtype).eps,
+                    )
+                )
+                self.assertTrue(torch.allclose(roma.RotationUnitQuat(scaled).normalize().linear, unit))
+
+    def test_quaternion_rescaling_gradients(self):
+        q = torch.tensor([0.3, -0.7, 0.5, 0.9], dtype=torch.float64, requires_grad=True)
+        self.assertTrue(torch.autograd.gradcheck(roma.quat_normalize, (q,)))
+        self.assertTrue(torch.autograd.gradcheck(roma.quat_inverse, (q,)))
+
     def test_unitquat(self):
         batch_size = 100
         for dtype in (torch.float32, torch.float64):
