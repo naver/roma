@@ -242,9 +242,7 @@ class TestUtils(unittest.TestCase):
                 # Similar test when shortest_arc==True
                 q = roma.unitquat_slerp(q0, q1, steps, shortest_arc=True)
                 self.assertTrue(is_close(q[0], q0))
-                self.assertTrue(
-                    torch.all(torch.min(torch.norm(q[-1] - q1, dim=-1), torch.norm(q[-1] + q1, dim=-1)) < 5e-6)
-                )
+                self.assertTrue(torch.all(roma.unitquat_geodesic_distance(q[-1], q1) < 1e-5))
 
     def test_unitquat_slerp(self):
         # Test of slerp on a specific example,

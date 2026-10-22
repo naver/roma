@@ -330,7 +330,7 @@ class TestMappings(unittest.TestCase):
             xbis = roma.unitquat_to_rotvec(q)
             qbis = roma.rotvec_to_unitquat(xbis)
             # Ensure cyclic consistency of the mappings
-            self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 1e-6))
+            self.assertTrue(torch.all(roma.unitquat_geodesic_distance(qbis, q) < 2e-6))
             xter = roma.unitquat_to_rotvec(qbis)
             self.assertTrue(is_close(xbis, xter))
 
@@ -364,9 +364,7 @@ class TestMappings(unittest.TestCase):
                 # Ensure cyclic consistency of the mappings in any case
                 for x in xp, xm, xpn, xmn:
                     qbis = roma.rotvec_to_unitquat(x)
-                    self.assertTrue(
-                        torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 5e-6)
-                    )
+                    self.assertTrue(torch.all(roma.unitquat_geodesic_distance(qbis, q) < 1e-5))
 
     def test_rotvec_rotmat(self):
         torch.manual_seed(666)
@@ -395,7 +393,7 @@ class TestMappings(unittest.TestCase):
             self.assertTrue(roma.is_rotation_matrix(R, 1e-5))
             # Backward
             qbis = roma.rotmat_to_unitquat(R)
-            self.assertTrue(torch.all(torch.min(torch.norm(qbis - q, dim=-1), torch.norm(qbis + q, dim=-1)) < 1e-6))
+            self.assertTrue(torch.all(roma.unitquat_geodesic_distance(qbis, q) < 2e-6))
 
     def _rotmats_all_branches(self, dtype):
         r"""
