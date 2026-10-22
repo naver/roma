@@ -502,6 +502,76 @@ class TestUtils(unittest.TestCase):
         with self.assertRaises(ValueError):
             roma.rigid_points_registration_unitquat(X, X)
 
+    def test_rigid_registration_other_dimensions(self):
+        torch.manual_seed(666)
+        batch_shape = (8,)
+        n = 50
+        for D in (2, 4):
+            for weights in [None, torch.rand(size=batch_shape + (n,), dtype=torch.float64)]:
+                R_true = roma.special_procrustes(torch.randn(batch_shape + (D, D), dtype=torch.float64))
+                t_true = torch.randn(batch_shape + (D,), dtype=torch.float64)
+                scale_true = torch.exp(torch.randn(size=batch_shape, dtype=torch.float64))
+                X = torch.randn(batch_shape + (n, D), dtype=torch.float64)
+                Y = scale_true[..., None, None] * torch.einsum("...ik, ...jk -> ...ji", R_true, X) + t_true.unsqueeze(
+                    -2
+                )
+                R, t, scale = roma.rigid_points_registration(X, Y, weights, compute_scaling=True)
+                self.assertTrue(is_close(R, R_true))
+                self.assertTrue(is_close(t, t_true))
+                self.assertTrue(is_close(scale, scale_true))
+                R, scale = roma.rigid_vectors_registration(X, Y - t_true.unsqueeze(-2), weights, compute_scaling=True)
+                self.assertTrue(is_close(R, R_true))
+                self.assertTrue(is_close(scale, scale_true))
+
+    def test_rigid_registration_broadcasting(self):
+        r"""
+        Inputs with different but broadcastable batch shapes give the same results as explicitly broadcast inputs.
+        """
+        torch.manual_seed(666)
+        n = 20
+        for D in (2, 3, 4):
+            x = torch.randn(5, 1, n, D, dtype=torch.float64)
+            y = torch.randn(1, 4, n, D, dtype=torch.float64)
+            for weights in (None, torch.rand(4, n, dtype=torch.float64)):
+                xb, yb = torch.broadcast_tensors(x, y)
+                wb = None if weights is None else weights.expand(5, 4, n)
+                names = ["rigid_vectors_registration", "rigid_points_registration"]
+                if D == 3:
+                    names += ["rigid_vectors_registration_unitquat", "rigid_points_registration_unitquat"]
+                for name in names:
+                    with self.subTest(D=D, weights=weights is not None, name=name):
+                        func = getattr(roma, name)
+                        results = func(x, y, weights, compute_scaling=True)
+                        expected = func(xb, yb, wb, compute_scaling=True)
+                        for a, b in zip(results, expected):
+                            self.assertEqual(a.shape, b.shape)
+                            self.assertTrue(torch.allclose(a, b, atol=1e-12))
+
+    @unittest.skipIf(
+        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
+        "torch.compile is not properly supported in PyTorch < 2.4",
+    )
+    def test_rigid_registration_unitquat_torch_compile_fullgraph(self):
+        torch.manual_seed(666)
+        X = torch.randn(10, 20, 3, dtype=torch.float64)
+        Y = torch.randn(10, 20, 3, dtype=torch.float64)
+        weights = torch.rand(10, 20, dtype=torch.float64)
+
+        def func(Y, weights):
+            q, t, scale = roma.rigid_points_registration_unitquat(X, Y, weights, compute_scaling=True)
+            # Sign-invariant function of the quaternion.
+            return torch.cat((q * q[..., -1:].sign(), t, scale[..., None]), dim=-1)
+
+        grad_output = torch.randn(10, 8, dtype=torch.float64)
+        results = []
+        for f in (func, torch.compile(func, backend="aot_eager", fullgraph=True)):
+            Yr, wr = Y.clone().requires_grad_(), weights.clone().requires_grad_()
+            output = f(Yr, wr)
+            output.backward(grad_output)
+            results.append((output, Yr.grad, wr.grad))
+        for a, b in zip(*results):
+            self.assertTrue(torch.allclose(a, b, atol=1e-12))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -910,39 +910,30 @@ def rotmat_to_unitquat(R):
         R (...x3x3 tensor): batch of rotation matrices.
     Returns:
         batch of unit quaternions (...x4 tensor, XYZW convention).
+    References:
+        - F.L. Markley, “Unit quaternion from rotation matrix,” Journal of Guidance, Control, and Dynamics, 31(2), 2008, pp. 440-442, doi: 10.2514/1.31730.
     """
-    matrix, batch_shape = roma.internal.flatten_batch_dims(R, end_dim=-3)
-    num_rotations, D1, D2 = matrix.shape
-    assert (D1, D2) == (3, 3), "Input should be a Bx3x3 tensor."
+    assert R.shape[-2:] == (3, 3), "Input should be a ...x3x3 tensor."
 
-    # Adapted from SciPy:
-    # https://github.com/scipy/scipy/blob/7cb3d751756907238996502b92709dc45e1c6596/scipy/spatial/transform/rotation.py#L480
-
-    decision_matrix = torch.empty((num_rotations, 4), dtype=matrix.dtype, device=matrix.device)
-    decision_matrix[:, :3] = matrix.diagonal(dim1=1, dim2=2)
-    decision_matrix[:, -1] = decision_matrix[:, :3].sum(axis=1)
-    choices = decision_matrix.argmax(axis=1)
-
-    quat = torch.empty((num_rotations, 4), dtype=matrix.dtype, device=matrix.device)
-
-    ind = torch.nonzero(choices != 3, as_tuple=True)[0]
-    i = choices[ind]
-    j = (i + 1) % 3
-    k = (j + 1) % 3
-
-    quat[ind, i] = 1 - decision_matrix[ind, -1] + 2 * matrix[ind, i, i]
-    quat[ind, j] = matrix[ind, j, i] + matrix[ind, i, j]
-    quat[ind, k] = matrix[ind, k, i] + matrix[ind, i, k]
-    quat[ind, 3] = matrix[ind, k, j] - matrix[ind, j, k]
-
-    ind = torch.nonzero(choices == 3, as_tuple=True)[0]
-    quat[ind, 0] = matrix[ind, 2, 1] - matrix[ind, 1, 2]
-    quat[ind, 1] = matrix[ind, 0, 2] - matrix[ind, 2, 0]
-    quat[ind, 2] = matrix[ind, 1, 0] - matrix[ind, 0, 1]
-    quat[ind, 3] = 1 + decision_matrix[ind, -1]
-
-    quat = quat / torch.norm(quat, dim=1)[:, None]
-    return roma.internal.unflatten_batch_dims(quat, batch_shape)
+    # Markley's variant of Shepperd's method, with the notations of Markley (2008), whose attitude matrix is A = R^T,
+    # and whose quaternions q = (q1, q2, q3, q4) are in XYZW convention:
+    # each of the four vectors x^(i) = 4 q_i q (eq. 7) is computed from the entries of A (eq. 8), and q is obtained
+    # by normalizing the one corresponding to the largest q_i^2 (eq. 9), i.e. to the largest diagonal entry 4 q_i^2 (eq. 4).
+    # Unlike Shepperd's original method (computing q_i as a square root and dividing the other entries of x^(i) by 4 q_i),
+    # this returns a unit quaternion even for slightly non-orthonormal inputs.
+    # All the x^(i) are computed and the best one is selected, which avoids data-dependent indexing
+    # (device synchronizations, and graph breaks with torch.compile).
+    (a11, a12, a13), (a21, a22, a23), (a31, a32, a33) = (row.unbind(-1) for row in R.transpose(-1, -2).unbind(-2))
+    # x[..., i - 1, :] = x^(i), a symmetric 4x4 matrix equal to 4 q q^T.
+    # fmt: off
+    x = torch.stack([1 + a11 - a22 - a33, a12 + a21, a13 + a31, a23 - a32,
+                     a21 + a12, 1 + a22 - a33 - a11, a23 + a32, a31 - a13,
+                     a31 + a13, a32 + a23, 1 + a33 - a11 - a22, a12 - a21,
+                     a23 - a32, a31 - a13, a12 - a21, 1 + a11 + a22 + a33], dim=-1).unflatten(-1, (4, 4))
+    # fmt: on
+    i = x.diagonal(dim1=-2, dim2=-1).argmax(dim=-1)
+    x_i = torch.gather(x, -2, i[..., None, None].expand(*i.shape, 1, 4))[..., 0, :]
+    return x_i / torch.norm(x_i, dim=-1, keepdim=True)
 
 
 def rotvec_to_rotmat(rotvec: torch.Tensor, epsilon=1e-6) -> torch.Tensor:

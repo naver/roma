@@ -4,6 +4,7 @@
 import torch
 import roma
 import unittest
+import unittest.mock
 from test import utils
 
 
@@ -128,6 +129,38 @@ class TestProcrustesDerivatives(unittest.TestCase):
                     f(Mr).backward(grad_R)
                     grads.append(Mr.grad)
                 self.assertTrue(torch.allclose(grads[0], grads[1], atol=1e-12))
+
+    @unittest.skipIf(
+        tuple(int(s) for s in torch.__version__.split(".")[:2]) < (2, 4),
+        "torch.compile is not properly supported in PyTorch < 2.4",
+    )
+    def test_special_procrustes_unitquat_backward_torch_compile_fullgraph(self):
+        r"""
+        torch.compile(fullgraph=True) through special_procrustes_unitquat, with Horn's method
+        and with the SVD-based fallback used on devices without float64 support.
+        """
+        device = torch.device(0) if torch.cuda.is_available() else None
+        torch.manual_seed(666)
+        M = torch.randn(10, 3, 3, dtype=torch.float64, device=device)
+        grad_q = torch.randn(10, 4, dtype=torch.float64, device=device)
+
+        def func(M):
+            # Sign-invariant function of the quaternion.
+            q = roma.special_procrustes_unitquat(M)
+            return q * q[..., -1:].sign()
+
+        for supports_float64 in (True, False):
+            with self.subTest(supports_float64=supports_float64):
+                with unittest.mock.patch("roma.mappings._supports_float64", lambda device: supports_float64):
+                    torch._dynamo.reset()
+                    results = []
+                    for f in (func, torch.compile(func, backend="aot_eager", fullgraph=True)):
+                        Mr = M.clone().requires_grad_()
+                        q = f(Mr)
+                        q.backward(grad_q)
+                        results.append((q, Mr.grad))
+                self.assertTrue(torch.allclose(results[0][0], results[1][0], atol=1e-12))
+                self.assertTrue(torch.allclose(results[0][1], results[1][1], atol=1e-12))
 
 
 class TestProcrustesForwardDerivatives(unittest.TestCase):
