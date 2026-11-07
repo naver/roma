@@ -2,6 +2,7 @@
 # Copyright (c) 2020 NAVER Corp.
 # 3-Clause BSD License.
 import unittest
+import math
 import torch
 import numpy as np
 import roma
@@ -323,6 +324,180 @@ class TestUtils(unittest.TestCase):
 
                 self.assertTrue(torch.autograd.gradcheck(func, inputs))
                 self.assertTrue(torch.autograd.gradgradcheck(func, inputs))
+
+    def test_unitquat_slerp_nearby_extrapolation(self):
+        # Build references directly from the represented endpoint angle, independently of RoMa.
+        cases = (
+            (torch.float32, 1e-4, 1e4),
+            (torch.float64, 1e-8, 1e8),
+            (torch.float32, 1e-8, 1e8),
+            (torch.float32, 1e-30, 1e30),
+            (torch.float64, 1e-200, 1e200),
+        )
+        for dtype, half_angle, large_step in cases:
+            for axis_values in ((1.0, 0.0, 0.0), (1.0, 2.0, 3.0)):
+                axis = torch.nn.functional.normalize(torch.tensor(axis_values, dtype=dtype), dim=-1)
+                q0 = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=dtype)
+                angle = torch.tensor(half_angle, dtype=dtype)
+                q1 = torch.cat((angle.sin() * axis, angle.cos().reshape(1)))
+                steps = torch.tensor([-large_step, -0.5, 0.0, 0.3, 1.0, 1.7, large_step], dtype=dtype)
+                # Python's hypot avoids squaring tiny values in the independent reference.
+                sin_angle = math.hypot(*q1[:3].tolist())
+                reference_axis = q1[:3].double() / sin_angle
+                angles = steps.double() * math.atan2(sin_angle, q1[3].item())
+                expected = torch.cat((angles.sin()[:, None] * reference_axis, angles.cos()[:, None]), dim=-1).to(dtype)
+                for shortest_arc in (True, False):
+                    with self.subTest(dtype=dtype, half_angle=half_angle, axis=axis_values, shortest_arc=shortest_arc):
+                        actual = roma.unitquat_slerp(q0, q1, steps, shortest_arc=shortest_arc)
+                        torch.testing.assert_close(actual, expected, atol=8 * torch.finfo(dtype).eps, rtol=0)
+
+                        # Left multiplication by the nonidentity unit quaternion (0, 0, 1, 0)
+                        # is this exact signed permutation, avoiding sub-ulp endpoint perturbations.
+                        def rotate(q):
+                            return torch.stack((-q[..., 1], q[..., 0], q[..., 3], -q[..., 2]), dim=-1)
+
+                        rotated = roma.unitquat_slerp(rotate(q0), rotate(q1), steps, shortest_arc=shortest_arc)
+                        torch.testing.assert_close(rotated, rotate(expected), atol=8 * torch.finfo(dtype).eps, rtol=0)
+
+    def test_unitquat_slerp_extrapolation_mixed_dtypes(self):
+        for dtype, step_dtype, half_angle, large_step in (
+            (torch.float32, torch.float64, 1e-40, 1e40),
+            (torch.float64, torch.float32, 1e-8, 1e8),
+        ):
+            with self.subTest(dtype=dtype, step_dtype=step_dtype):
+                angle = torch.tensor(half_angle, dtype=dtype)
+                q0 = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=dtype)
+                q1 = torch.stack((angle.sin(), angle * 0, angle * 0, angle.cos()))
+                steps = torch.tensor([-large_step, 0.0, 1.0, large_step], dtype=step_dtype)
+                angles = steps.double() * torch.atan2(q1[0].double(), q1[3].double())
+                expected = torch.stack((angles.sin(), angles * 0, angles * 0, angles.cos()), dim=-1)
+                actual = roma.unitquat_slerp(q0, q1, steps)
+                torch.testing.assert_close(actual, expected, atol=8 * torch.finfo(dtype).eps, rtol=0)
+
+    def test_unitquat_slerp_extrapolation_shapes(self):
+        # Mix coincident, nearby, and ordinary-angle endpoints in a multidimensional batch.
+        for dtype in (torch.float32, torch.float64):
+            small_angle = 1e-4 if dtype == torch.float32 else 1e-8
+            large_step = 1e4 if dtype == torch.float32 else 1e8
+            angles = torch.tensor([[0.0, small_angle], [0.1, -small_angle]], dtype=dtype)
+            q0 = torch.zeros((2, 2, 4), dtype=dtype)
+            q0[..., 3] = 1
+            q1 = torch.stack((angles.sin(), angles * 0, angles * 0, angles.cos()), dim=-1)
+            for steps in (
+                torch.tensor(large_step, dtype=dtype),
+                torch.tensor([[-large_step, 0.3], [1.0, large_step]], dtype=dtype),
+                torch.empty((0,), dtype=dtype),
+                torch.empty((2, 0), dtype=dtype),
+            ):
+                with self.subTest(dtype=dtype, steps_shape=steps.shape):
+                    actual = roma.unitquat_slerp(q0, q1, steps)
+                    self.assertEqual(actual.shape, steps.shape + (2, 2, 4))
+                    self.assertTrue(torch.isfinite(actual).all())
+                    # Check the nearby and identical rows; ordinary large-angle phase rounding is independent.
+                    represented = torch.atan2(q1[0, :, 0].double(), q1[0, :, 3].double())
+                    reference_angles = steps.double()[..., None] * represented
+                    expected = torch.stack(
+                        (reference_angles.sin(), reference_angles * 0, reference_angles * 0, reference_angles.cos()),
+                        dim=-1,
+                    ).to(dtype)
+                    torch.testing.assert_close(actual[..., 0, :, :], expected, atol=8 * torch.finfo(dtype).eps, rtol=0)
+                    empty_q = q0.new_empty((0, 4))
+                    empty_result = roma.unitquat_slerp(empty_q, empty_q, steps)
+                    self.assertEqual(empty_result.shape, steps.shape + (0, 4))
+                    self.assertTrue(torch.isfinite(empty_result).all())
+
+    def test_unitquat_slerp_identical_extrapolation_derivatives(self):
+        for dtype in (torch.float32, torch.float64):
+            # The second orientation has a squared norm that rounds slightly away from one.
+            orientations = (
+                torch.tensor([0.5, -0.5, 0.5, 0.5], dtype=dtype),
+                torch.nn.functional.normalize(torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=dtype), dim=-1),
+            )
+            for q0 in orientations:
+                for sign, shortest_arc in ((1, True), (-1, True), (1, False)):
+                    with self.subTest(dtype=dtype, q0=q0, sign=sign, shortest_arc=shortest_arc):
+                        steps = torch.tensor([-1e8, -0.5, 0.0, 0.3, 1.0, 1e8], dtype=dtype)
+                        inputs = [x.clone().requires_grad_(True) for x in (q0, sign * q0, steps)]
+                        actual = roma.unitquat_slerp(*inputs, shortest_arc=shortest_arc)
+                        torch.testing.assert_close(actual, q0.expand_as(actual))
+                        first = torch.autograd.grad(actual.sum(), inputs, create_graph=True)
+                        self.assertTrue(all(torch.isfinite(g).all() for g in first))
+                        second = torch.autograd.grad(sum(g.square().sum() for g in first), inputs, allow_unused=True)
+                        self.assertTrue(all(g is None or torch.isfinite(g).all() for g in second))
+                        # Discarded spherical branches must not overflow their phases.
+                        extreme_steps = steps.new_tensor([-1.0, 1.0]) * (torch.finfo(dtype).max / 4)
+                        extreme = roma.unitquat_slerp(q0, sign * q0, extreme_steps, shortest_arc=shortest_arc)
+                        torch.testing.assert_close(extreme, q0.expand_as(extreme))
+
+    def test_unitquat_slerp_nearby_extrapolation_derivatives(self):
+        for dtype, angle, step in ((torch.float32, 1e-4, 1e4), (torch.float64, 1e-8, 1e8)):
+            a = torch.tensor(angle, dtype=dtype)
+            q0 = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=dtype)
+            q1 = torch.stack((a.sin(), a * 0, a * 0, a.cos()))
+            steps = torch.tensor([-step, step], dtype=dtype)
+            inputs = [x.clone().requires_grad_(True) for x in (q0, q1, steps)]
+            actual = roma.unitquat_slerp(*inputs)
+            first = torch.autograd.grad(actual.sum(), inputs, create_graph=True)
+            self.assertTrue(all(torch.isfinite(g).all() for g in first))
+            second = torch.autograd.grad(sum(g.square().sum() for g in first), inputs, allow_unused=True)
+            self.assertTrue(all(g is None or torch.isfinite(g).all() for g in second))
+            # Check the new branch against analytic axis-angle first, second, and mixed derivatives.
+            for sign in (-1, 1):
+                theta = torch.tensor(2 * angle, dtype=dtype, requires_grad=True)
+                step_scalar = torch.tensor(sign * step, dtype=dtype, requires_grad=True)
+                endpoint = torch.stack(((theta / 2).sin(), theta * 0, theta * 0, (theta / 2).cos()))
+                x = roma.unitquat_slerp(q0, endpoint, step_scalar)[0]
+                dtheta, ds = torch.autograd.grad(x, (theta, step_scalar), create_graph=True)
+                d2theta, mixed = torch.autograd.grad(dtheta, (theta, step_scalar), retain_graph=True)
+                d2s = torch.autograd.grad(ds, step_scalar)[0]
+                t, s = theta.detach(), step_scalar.detach()
+                phi = s * t / 2
+                expected = (
+                    s / 2 * phi.cos(),
+                    t / 2 * phi.cos(),
+                    -s.square() / 4 * phi.sin(),
+                    -t.square() / 4 * phi.sin(),
+                    phi.cos() / 2 - s * t / 4 * phi.sin(),
+                )
+                for actual_derivative, expected_derivative in zip((dtheta, ds, d2theta, d2s, mixed), expected):
+                    # Relative tolerance scales with dtype; none of these references are zero.
+                    torch.testing.assert_close(
+                        actual_derivative, expected_derivative, rtol=64 * torch.finfo(dtype).eps, atol=0
+                    )
+        # Stay in the new spherical branch during numerical perturbations.
+        steps = torch.tensor([-10.0, 10.0], dtype=torch.float64, requires_grad=True)
+        inputs = (q0.requires_grad_(True), q1.requires_grad_(True), steps)
+        self.assertTrue(torch.autograd.gradcheck(roma.unitquat_slerp, inputs, eps=1e-10, atol=1e-4, rtol=1e-3))
+        self.assertTrue(torch.autograd.gradgradcheck(roma.unitquat_slerp, inputs, eps=1e-10, atol=1e-4, rtol=1e-3))
+
+    def test_slerp_nearby_extrapolation_wrappers(self):
+        for dtype in (torch.float32, torch.float64):
+            angle = torch.tensor(2e-4 if dtype == torch.float32 else 2e-8, dtype=dtype)
+            steps = torch.tensor([-1e4, 1e4] if dtype == torch.float32 else [-1e8, 1e8], dtype=dtype)
+            rotvec0 = torch.zeros(3, dtype=dtype)
+            rotvec1 = torch.stack((angle, angle * 0, angle * 0))
+            expected_rotvec = steps[:, None] * rotvec1
+            torch.testing.assert_close(roma.rotvec_slerp(rotvec0, rotvec1, steps), expected_rotvec)
+
+            def x_rotation(a):
+                zero, one = torch.zeros_like(a), torch.ones_like(a)
+                return torch.stack((one, zero, zero, zero, a.cos(), -a.sin(), zero, a.sin(), a.cos()), dim=-1).reshape(
+                    a.shape + (3, 3)
+                )
+
+            expected_rotmat = x_rotation(steps * angle)
+            torch.testing.assert_close(
+                roma.rotmat_slerp(x_rotation(angle * 0), x_rotation(angle), steps), expected_rotmat
+            )
+            q0 = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=dtype)
+            q1 = torch.stack(((angle / 2).sin(), angle * 0, angle * 0, (angle / 2).cos()))
+            half_angles = steps * angle / 2
+            expected_quat = torch.stack(
+                (half_angles.sin(), half_angles * 0, half_angles * 0, half_angles.cos()), dim=-1
+            )
+            with self.assertWarns(DeprecationWarning):
+                actual = roma.unitquat_slerp_fast(q0, q1, steps)
+            torch.testing.assert_close(actual, expected_quat)
 
     def test_composition(self):
         for dtype in (torch.float32, torch.float64):
