@@ -398,27 +398,50 @@ def unitquat_slerp(q0, q1, steps, shortest_arc=True):
     # sin(omega) is computed as the norm of the component of q1 orthogonal to q0,
     # so that omega = atan2(sin, cos) remains accurate for small angles (unlike acos(cos_omega)).
     rejection = q1 - cos_omega[..., None] * q0
-    # The norm is not differentiable at 0, i.e. for identical quaternions, where linear interpolation is used instead.
-    # Below this threshold, linear interpolation is indistinguishable from spherical interpolation at machine precision.
     threshold = math.sqrt(torch.finfo(q0.dtype).eps)
-    # (Only for nearby quaternions, and not for nearly antipodal ones when shortest_arc=False.)
+    # Only nearby, non-antipodal quaternions are candidates for linear interpolation.
     nearby_quaternions = torch.logical_and(torch.sum(rejection**2, dim=-1) < threshold**2, cos_omega > 0)
-    # Evaluate the discarded branch at a safe point to avoid NaN gradients.
-    rejection = torch.where(nearby_quaternions[..., None], torch.ones_like(rejection), rejection)
-    sin_omega = torch.linalg.norm(rejection, dim=-1)
-    omega = torch.atan2(sin_omega, cos_omega)
+    # A small endpoint angle need not remain small after extrapolation. Include a sentinel
+    # so that the bound also works for scalar and empty step tensors.
+    step_bound = torch.cat((steps.abs().reshape(-1), (1.0 - steps).abs().reshape(-1), steps.new_ones(1))).amax()
+    linear = nearby_quaternions & (torch.sum((step_bound.reshape(1, 1) * rejection) ** 2, dim=-1) < threshold**2)
+    # Equal inputs may have a tiny nonzero rejection due to rounding of their squared norm.
+    linear = linear | torch.all(q0 == q1, dim=-1)
+
+    # Keep the usual formula for ordinary and nearly antipodal inputs. Evaluate its
+    # discarded branch at a safe point to avoid singular norms and large coefficients.
+    safe_rejection = torch.where(nearby_quaternions[..., None], torch.ones_like(rejection), rejection)
+    sin_omega = torch.linalg.norm(safe_rejection, dim=-1)
+    omega = torch.where(nearby_quaternions, torch.zeros_like(sin_omega), torch.atan2(sin_omega, cos_omega))
+
+    # For nearby extrapolation, use an orthogonal basis instead of combining large,
+    # nearly opposite coefficients of q0 and q1. Scale before taking the norm to
+    # preserve very small, representable separations whose squares underflow.
+    extrapolation = nearby_quaternions & ~linear
+    safe_rejection = torch.where(extrapolation[..., None], rejection, torch.ones_like(rejection))
+    scale = safe_rejection.abs().amax(dim=-1, keepdim=True)
+    scaled_rejection = safe_rejection / scale
+    scaled_norm = torch.linalg.norm(scaled_rejection, dim=-1, keepdim=True)
+    tangent = scaled_rejection / scaled_norm
+    extrapolation_omega = torch.where(
+        extrapolation, torch.atan2((scale * scaled_norm).squeeze(-1), cos_omega), torch.zeros_like(cos_omega)
+    )
 
     shape = (1,) * steps.dim() + (-1, 1)
     omega = omega.reshape(shape)
     sin_omega = sin_omega.reshape(shape)
-    nearby_quaternions = nearby_quaternions.reshape(shape)
+    extrapolation_omega = extrapolation_omega.reshape(shape)
     s = steps.reshape(steps.shape + (1, 1))
+    q0 = q0.reshape((1,) * steps.dim() + q0.shape)
+    q1 = q1.reshape((1,) * steps.dim() + q1.shape)
     # Slerp coefficients sin((1-s) omega) / sin(omega) and sin(s omega) / sin(omega).
-    # Division is safe: sin_omega is 1 for nearby quaternions and larger than the threshold otherwise.
-    alpha = torch.where(nearby_quaternions, 1.0 - s, torch.sin((1.0 - s) * omega) / sin_omega)
-    beta = torch.where(nearby_quaternions, s, torch.sin(s * omega) / sin_omega)
-    # Interpolation
-    q = alpha * q0.reshape((1,) * steps.dim() + q0.shape) + beta * q1.reshape((1,) * steps.dim() + q1.shape)
+    q = torch.sin((1.0 - s) * omega) / sin_omega * q0 + torch.sin(s * omega) / sin_omega * q1
+    orthogonal_q = torch.cos(s * extrapolation_omega) * q0 + torch.sin(s * extrapolation_omega) * tangent
+    q = torch.where(extrapolation.reshape(shape), orthogonal_q, q)
+    # This form stays constant at identical endpoints even for very large steps.
+    linear = linear.reshape(shape)
+    linear_delta = torch.where(linear, q1 - q0, torch.zeros_like(q0))
+    q = torch.where(linear, q0 + s * linear_delta, q)
     # Normalization of the output
     q = quat_normalize(q)
     return q.reshape(steps.shape + batch_shape + (4,))
